@@ -193,6 +193,7 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 .gnode.dim{opacity:.22;}
 .gedge.dim{opacity:.12;}
 input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radius:6px;}
+.rename{text-decoration:underline dotted; text-underline-offset:3px; cursor:pointer;}
 .elabel{
   font-weight:600; text-anchor:middle; pointer-events:none;
   paint-order:stroke; stroke:#ffffff; stroke-width:3.5px; stroke-linejoin:round;
@@ -259,13 +260,8 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
           <option value="paper">暖紙感（原版）</option>
         </select>
         <label>熟度顏色（點色塊修改）</label>
-        <div class="row">
-          <span class="muted">鐵桿</span><input type="color" class="colorpick" id="wc-hot">
-          <span class="muted">溫</span><input type="color" class="colorpick" id="wc-warm">
-          <span class="muted">冷</span><input type="color" class="colorpick" id="wc-cold">
-          <span class="grow"></span>
-          <button class="btn small" id="wc-reset">恢復預設</button>
-        </div>
+        <div class="row" id="warmth-row"></div>
+        <div class="muted" style="margin-top:8px;">點虛線底線的名稱可以改名。</div>
       </div>
       <div class="card">
         <div style="font-weight:700; margin-bottom:6px;">資料統計</div>
@@ -347,6 +343,20 @@ function applySkin(){
     if (custom) document.body.style.setProperty("--" + k, custom);
     else document.body.style.removeProperty("--" + k);
   });
+}
+function warmthLabel(k){
+  const custom = DB && DB.settings && DB.settings.warmthLabels && DB.settings.warmthLabels[k];
+  return custom || (WARMTH[k] ? WARMTH[k].label : WARMTH.warm.label);
+}
+function inlineRename(el, current, onDone){
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.value = current;
+  inp.style.maxWidth = "9em"; inp.style.padding = "4px 8px"; inp.style.fontSize = "14px";
+  el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; onDone(inp.value.trim()); };
+  inp.addEventListener("blur", commit);
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
 }
 const DEFAULT_RELTYPES = [
   {key:"intro",     label:"介紹人", directed:true,  color:"#c81d1d", builtin:true},
@@ -465,13 +475,12 @@ function searchCustomers(q){
   });
 }
 function personRowHTML(c){
-  const w = WARMTH[c.warmth] || WARMTH.warm;
   const lc = lastContact(c.id);
   const meta = [c.company, (c.tags||[]).map(t => "#" + t).join(" "), lc ? ("上次聯絡 " + lc) : "尚無互動紀錄"].filter(Boolean).join("・");
   return `<div class="person" data-open="${c.id}">
     <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
     <div class="info">
-      <div class="name">${esc(c.name)} <span class="chip warmth-${c.warmth}">${w.label}</span></div>
+      <div class="name">${esc(c.name)} <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span></div>
       <div class="meta">${esc(meta)}</div>
     </div>
   </div>`;
@@ -528,7 +537,7 @@ let listWarmth = "all";
 let listTag = "all";
 function renderList(){
   const wf = document.getElementById("list-warmth-filter");
-  const options = [["all","全部"],["hot","鐵桿"],["warm","溫"],["cold","冷"]];
+  const options = [["all","全部"],["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")]];
   wf.innerHTML = options.map(([k,l]) =>
     `<button class="fbtn ${listWarmth===k?"on":""}" data-w="${k}">${l}</button>`).join("");
   wf.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { listWarmth = b.dataset.w; renderList(); }));
@@ -568,7 +577,6 @@ function relationLabel(r, viewpointId){
 function openDetail(id){
   const c = getCustomer(id);
   if (!c) return;
-  const w = WARMTH[c.warmth] || WARMTH.warm;
   const rels = relationsOf(id);
   const logs = interactionsOf(id);
   const fields = [
@@ -579,7 +587,7 @@ function openDetail(id){
 
   openSheet(c.name, `
     <div>
-      <span class="chip warmth-${c.warmth}">${w.label}</span>
+      <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span>
       ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
     </div>
     ${fields.map(f => `<div style="margin-top:8px;"><span class="muted">${f[0]}</span>　${f[1]}</div>`).join("")}
@@ -645,8 +653,8 @@ function openEdit(id){
     <label>標籤（用逗號分隔）</label><input type="text" id="f-tags" value="${esc(c ? (c.tags||[]).join("、") : "")}" placeholder="例：保險、高潛力、台中">
     <label>熟度</label>
     <div class="filterbar" id="f-warmth">
-      ${Object.entries(WARMTH).map(([k,v]) =>
-        `<button class="fbtn ${((c&&c.warmth)||"warm")===k?"on":""}" data-k="${k}">${v.label}</button>`).join("")}
+      ${Object.keys(WARMTH).map(k =>
+        `<button class="fbtn ${((c&&c.warmth)||"warm")===k?"on":""}" data-k="${k}">${esc(warmthLabel(k))}</button>`).join("")}
     </div>
     <label>備註</label><textarea id="f-note" rows="4">${esc(c ? c.note : "")}</textarea>
     <div class="row" style="margin-top:18px;">
@@ -849,8 +857,8 @@ function renderGraphLegend(){
   const usedTypes = new Set(DB.relations.map(r => r.type));
   const lg = document.getElementById("graph-legend");
   lg.innerHTML =
-    Object.entries(WARMTH).map(([k,v]) =>
-      `<span class="lg"><span class="swdot" style="background:${warmthColor(k)}"></span>${v.label}</span>`).join("") +
+    Object.keys(WARMTH).map(k =>
+      `<span class="lg"><span class="swdot" style="background:${warmthColor(k)}"></span>${esc(warmthLabel(k))}</span>`).join("") +
     DB.relationTypes.filter(t => usedTypes.has(t.key)).map(t =>
       `<span class="lg"><span class="sw" style="background:${t.color}"></span>${esc(t.label)}</span>`).join("");
 }
@@ -1053,7 +1061,7 @@ function renderSettings(){
     const used = DB.relations.filter(r => r.type === t.key).length;
     return `<div class="row" style="margin-bottom:6px;">
       <input type="color" class="colorpick" data-ctype="${esc(t.key)}" value="${esc(t.color)}" style="width:34px;height:26px;">
-      <span class="grow">${esc(t.label)}${t.directed ? "（有方向）" : ""} <span class="muted">${used ? used + " 條" : ""}</span></span>
+      <span class="grow"><span class="rename" data-rename="${esc(t.key)}">${esc(t.label)}</span>${t.directed ? "（有方向）" : ""} <span class="muted">${used ? used + " 條" : ""}</span></span>
       ${t.builtin ? "" : `<button class="btn small" data-deltype="${esc(t.key)}" ${used ? "disabled" : ""}>${used ? "使用中" : "刪"}</button>`}
     </div>`;
   }).join("");
@@ -1065,6 +1073,23 @@ function renderSettings(){
     const t = DB.relationTypes.find(x => x.key === inp.dataset.ctype);
     if (t){ t.color = inp.value; save(); }
   }));
+  rl.querySelectorAll("[data-rename]").forEach(sp => sp.addEventListener("click", () => {
+    const t = DB.relationTypes.find(x => x.key === sp.dataset.rename);
+    if (!t) return;
+    inlineRename(sp, t.label, v => {
+      if (v && v !== t.label){
+        if (DB.relationTypes.some(x => x.label === v)) alert("已經有同名的種類了。");
+        else { t.label = v; save(); }
+      }
+      renderSettings();
+    });
+  }));
+
+  document.getElementById("warmth-row").innerHTML =
+    ["hot", "warm", "cold"].map(k =>
+      `<span class="muted rename" data-wname="${k}">${esc(warmthLabel(k))}</span>` +
+      `<input type="color" class="colorpick" id="wc-${k}" value="${warmthColor(k)}">`).join("") +
+    `<span class="grow"></span><button class="btn small" id="wc-reset">恢復預設</button>`;
 
   const skinSel = document.getElementById("skin-select");
   skinSel.value = currentSkin();
@@ -1082,8 +1107,17 @@ function renderSettings(){
   });
   document.getElementById("wc-reset").onclick = () => {
     delete DB.settings.warmthColors;
+    delete DB.settings.warmthLabels;
     save(); applySkin(); renderSettings();
   };
+  document.querySelectorAll("[data-wname]").forEach(sp => {
+    const k = sp.dataset.wname;
+    sp.textContent = warmthLabel(k);
+    sp.onclick = () => inlineRename(sp, warmthLabel(k), v => {
+      if (v) DB.settings.warmthLabels = Object.assign({}, DB.settings.warmthLabels, {[k]: v});
+      save(); renderSettings();
+    });
+  });
 }
 document.getElementById("btn-add-reltype").addEventListener("click", () => {
   const label = document.getElementById("new-reltype").value.trim();
