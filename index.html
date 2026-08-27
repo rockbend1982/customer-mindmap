@@ -115,12 +115,15 @@ nav#tabbar svg{width:22px; height:22px;}
 }
 h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; letter-spacing:2px;}
 .banner{
-  background:var(--danger-bg); color:var(--danger);
-  border:1px solid #e6c3c0; border-radius:12px;
-  padding:10px 14px; margin-bottom:14px; font-size:14px;
+  background:var(--card); color:var(--ink);
+  border:1px solid var(--card-line); border-radius:var(--r-card);
+  padding:12px 14px; margin-bottom:14px; font-size:14px;
   display:flex; align-items:center; gap:10px;
 }
 .banner .btn{flex:0 0 auto;}
+.banner.danger{background:var(--danger-bg); color:var(--danger); border-color:#e6c3c0;}
+.card-title{font-size:13px; color:var(--ink-soft); font-weight:700; letter-spacing:1.5px; margin:0 0 10px;}
+.card-divider{border:0; border-top:1px dashed var(--card-line); margin:10px 0;}
 
 /* 客戶列表項 */
 .person{
@@ -240,9 +243,8 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
         <button class="btn grow" id="btn-quick-buy" style="padding:10px 6px;">記購買</button>
         <button class="btn grow" id="btn-quick-add" style="padding:10px 6px;">新增客戶</button>
       </div>
-      <div id="home-insights" style="margin-top:14px;"></div>
+      <div id="home-insights"></div>
       <div id="home-dormant"></div>
-      <h2>最近互動</h2>
       <div id="home-recent"></div>
     </section>
 
@@ -591,21 +593,22 @@ function renderHome(){
   const bn = document.getElementById("backup-banner");
   if (backupOverdue()){
     bn.innerHTML = `<div class="banner"><span class="grow">已超過 7 天沒有備份，資料只存在這支手機裡。</span>
-      <button class="btn small danger" id="banner-go">去備份</button></div>`;
+      <button class="btn small" id="banner-go">去備份</button></div>`;
     document.getElementById("banner-go").addEventListener("click", () => showView("settings"));
   } else bn.innerHTML = "";
 
   const recent = DB.interactions.slice().sort((a,b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 10);
   const rb = document.getElementById("home-recent");
   if (!recent.length){
-    rb.innerHTML = `<div class="empty">還沒有互動紀錄。<br>跟客戶聊完，按「記一筆互動」隨手記下來。</div>`;
+    rb.innerHTML = `<div class="card"><div class="card-title">最近互動</div>
+      <div class="empty" style="border:0; background:none; padding:12px 0;">還沒有互動紀錄。<br>跟客戶聊完，按「記一筆互動」隨手記下來。</div></div>`;
   } else {
-    rb.innerHTML = recent.map(i => {
+    rb.innerHTML = `<div class="card"><div class="card-title">最近互動</div>` + recent.map(i => {
       const c = getCustomer(i.customerId);
       return `<div class="ilog" data-open="${i.customerId}">
         <span class="who">${esc(c ? c.name : "（已刪除）")}</span> <span class="when">${esc(i.date)}</span>
         <div class="txt">${esc(i.text)}</div></div>`;
-    }).join("");
+    }).join("") + `</div>`;
   }
   renderHomeInsights();
   renderHomeSearch();
@@ -630,7 +633,7 @@ function renderHomeInsights(){
     .map(c => ({c, d: dormantInfo(c.id)}))
     .sort((x, y) => (y.d.days == null ? 1e9 : y.d.days) - (x.d.days == null ? 1e9 : x.d.days))[0];
   const line = (label, html) =>
-    `<div class="row" style="margin-bottom:6px; align-items:baseline;"><span class="muted" style="flex:0 0 6.5em;">${label}</span><span class="grow">${html}</span></div>`;
+    `<div class="row" style="margin-bottom:9px; align-items:baseline;"><span class="muted" style="flex:0 0 6.5em;">${label}</span><span class="grow">${html}</span></div>`;
   const nameLink = c => `<span data-open="${c.id}" style="font-weight:600; cursor:pointer;">${esc(c.name)}</span>`;
   const spender = DB.customers.map(c => ({c, v: spentOf(c.id)})).filter(x => x.v > 0)
     .sort((a, b) => b.v - a.v)[0];
@@ -668,17 +671,19 @@ function renderHomeInsights(){
     islands.length ? line("孤島客戶", islands.slice(0, 3).map(nameLink).join("、") + (islands.length > 3 ? ` <span class="muted">…共 ${islands.length} 位</span>` : "")) : "",
     hotDorm && hotDorm.d.dormant ? line("該回溫的" + esc(warmthLabel("hot")), nameLink(hotDorm.c) + ` <span class="muted">${hotDorm.d.days == null ? "從未互動" : hotDorm.d.days + " 天沒聯絡"}</span>`) : "",
   ].filter(Boolean);
+  const divider = orgRows.length && rows.length > orgRows.length ? '<hr class="card-divider">' : "";
+  const customerRows = rows.slice(orgRows.length).join("");
   box.innerHTML = rows.length
-    ? `<div class="card"><div style="font-weight:700; margin-bottom:8px;">網絡洞察</div>${rows.join("")}</div>` : "";
+    ? `<div class="card"><div class="card-title">網絡洞察</div>${orgRows.join("")}${divider}${customerRows}</div>` : "";
 
   const dorm = DB.customers.map(c => ({c, d: dormantInfo(c.id)})).filter(x => x.d.dormant)
     .sort((x, y) => (y.d.days == null ? 1e9 : y.d.days) - (x.d.days == null ? 1e9 : x.d.days));
   dbox.innerHTML = dorm.length
-    ? `<h2>該聯絡了（超過 ${dormantLimit()} 天，共 ${dorm.length} 位）</h2>` +
-      dorm.slice(0, 5).map(x => `<div class="row" style="margin-bottom:6px;">
+    ? `<div class="card"><div class="card-title">該聯絡了（超過 ${dormantLimit()} 天，共 ${dorm.length} 位）</div>` +
+      dorm.slice(0, 5).map(x => `<div class="row" style="margin-bottom:9px;">
         <span class="grow" data-open="${x.c.id}" style="cursor:pointer;"><b>${esc(x.c.name)}</b>
           <span class="chip warmth-${x.c.warmth}" style="margin:0 0 0 4px;">${esc(warmthLabel(x.c.warmth))}</span></span>
-        <span class="muted">${x.d.days == null ? "從未互動" : x.d.days + " 天"}</span></div>`).join("")
+        <span class="muted">${x.d.days == null ? "從未互動" : x.d.days + " 天"}</span></div>`).join("") + `</div>`
     : "";
 }
 function renderHomeSearch(){
