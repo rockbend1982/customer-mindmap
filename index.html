@@ -18,11 +18,26 @@
 <style>
 :root{
   --paper:#ffffff; --card:#ffffff; --ink:#252525; --ink-soft:#6c757d;
-  --line:#e9e9e9; --accent:#252525; --brand-red:#c81d1d; --accent-soft:#ededed;
-  --hot:#c81d1d; --warm:#252525; --cold:#c3c9cf;
+  --line:#e9e9e9; --line-strong:#d9d9d9; --card-line:#ececec;
+  --accent:#252525; --brand-red:#c81d1d; --accent-soft:#ededed;
+  --btn-line:#252525; --btn-primary:#212121;
+  --hot:#c81d1d; --warm:#252525; --cold:#c3c9cf; --cold-fg:#252525;
   --hot-bg:#f9e4e4; --warm-bg:#ededed; --cold-bg:#f2f4f5;
   --danger:#a80b0b; --danger-bg:#faeaea;
+  --r-btn:999px; --r-card:0; --r-input:0; --r-person:0;
+  --dot:#ececec; --font-head:"Lora","Songti TC","Noto Serif TC",serif;
   --nav-h:58px;
+}
+body.skin-paper{
+  --paper:#faf6f0; --card:#ffffff; --ink:#3a3128; --ink-soft:#6f6457;
+  --line:#e7ddd0; --line-strong:#e7ddd0; --card-line:#e7ddd0;
+  --accent:#c2571a; --brand-red:#c2571a; --accent-soft:#f4e3d5;
+  --btn-line:#e7ddd0; --btn-primary:#c2571a;
+  --hot:#c2571a; --warm:#d99a2b; --cold:#7d8b99; --cold-fg:#ffffff;
+  --hot-bg:#f7e2d3; --warm-bg:#f8ecd2; --cold-bg:#e5eaef;
+  --danger:#b3372f; --danger-bg:#f6e0de;
+  --r-btn:10px; --r-card:14px; --r-input:10px; --r-person:12px;
+  --dot:#eee4d6; --font-head:"PingFang TC","Microsoft JhengHei UI",sans-serif;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0; padding:0; height:100%;}
@@ -36,7 +51,7 @@ body{
 button{font-family:inherit;}
 input,textarea,select{
   font-family:inherit; font-size:16px; color:var(--ink);
-  background:#fff; border:1px solid #d9d9d9; border-radius:0;
+  background:#fff; border:1px solid var(--line-strong); border-radius:var(--r-input);
   padding:10px 12px; width:100%;
 }
 input:focus,textarea:focus,select:focus{outline:2px solid var(--accent); outline-offset:0; border-color:var(--accent);}
@@ -50,7 +65,7 @@ header{
   border-bottom:1px solid var(--line); background:var(--paper);
   flex:0 0 auto;
 }
-header h1{font-size:21px; margin:0; letter-spacing:3px; font-family:"Lora","Songti TC","Noto Serif TC",serif; font-weight:500;}
+header h1{font-size:21px; margin:0; letter-spacing:3px; font-family:var(--font-head); font-weight:500;}
 header .sub{font-size:12px; color:var(--ink-soft);}
 main{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);}
 .view{display:none; padding:16px;}
@@ -73,15 +88,15 @@ nav#tabbar button.on{color:var(--accent); font-weight:600;}
 nav#tabbar svg{width:22px; height:22px;}
 
 /* ===== 通用元件 ===== */
-.card{background:var(--card); border:1px solid #ececec; border-radius:0; padding:16px; margin-bottom:14px;}
+.card{background:var(--card); border:1px solid var(--card-line); border-radius:var(--r-card); padding:16px; margin-bottom:14px;}
 .btn{
-  display:inline-block; border:1px solid #252525; background:#fff; color:var(--ink);
-  border-radius:999px; padding:10px 18px; font-size:15px; cursor:pointer; font-weight:500;
+  display:inline-block; border:1px solid var(--btn-line); background:#fff; color:var(--ink);
+  border-radius:var(--r-btn); padding:10px 18px; font-size:15px; cursor:pointer; font-weight:500;
 }
-.btn.primary{background:#212121; border-color:#212121; color:#fff; font-weight:600;}
+.btn.primary{background:var(--btn-primary); border-color:var(--btn-primary); color:#fff; font-weight:600;}
 .btn.danger{background:var(--brand-red); border-color:var(--brand-red); color:#fff;}
 .btn.ghost{border-color:transparent; color:var(--brand-red);}
-.btn.small{padding:5px 12px; font-size:13px; border-radius:999px;}
+.btn.small{padding:5px 12px; font-size:13px; border-radius:var(--r-btn);}
 .btn:active{opacity:.75;}
 .row{display:flex; gap:10px; align-items:center;}
 .row .grow{flex:1;}
@@ -91,8 +106,8 @@ nav#tabbar svg{width:22px; height:22px;}
 }
 .chip.tag{background:#f5f5f5; color:var(--ink-soft);}
 .warmth-hot{background:var(--hot-bg); color:var(--brand-red);}
-.warmth-warm{background:var(--warm-bg); color:#252525;}
-.warmth-cold{background:var(--cold-bg); color:#6c757d;}
+.warmth-warm{background:var(--warm-bg); color:var(--ink);}
+.warmth-cold{background:var(--cold-bg); color:var(--ink-soft);}
 .muted{color:var(--ink-soft); font-size:13px;}
 .empty{
   text-align:center; color:var(--ink-soft); padding:36px 20px; font-size:14px;
@@ -110,7 +125,7 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 /* 客戶列表項 */
 .person{
   display:flex; align-items:center; gap:12px;
-  background:var(--card); border:1px solid #ececec; border-radius:0;
+  background:var(--card); border:1px solid var(--card-line); border-radius:var(--r-person);
   padding:12px; margin-bottom:8px; cursor:pointer;
 }
 .person .dot{
@@ -118,7 +133,7 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
   display:flex; align-items:center; justify-content:center;
   font-size:15px; font-weight:600; color:#fff;
 }
-.dot-hot{background:var(--hot);} .dot-warm{background:var(--warm);} .dot-cold{background:var(--cold); color:#252525;}
+.dot-hot{background:var(--hot);} .dot-warm{background:var(--warm);} .dot-cold{background:var(--cold); color:var(--cold-fg);}
 .person .info{flex:1; min-width:0;}
 .person .name{font-weight:600;}
 .person .meta{font-size:12px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -132,10 +147,10 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 /* 篩選列 */
 .filterbar{display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; -webkit-overflow-scrolling:touch;}
 .filterbar .fbtn{
-  flex:0 0 auto; border:1px solid #d9d9d9; background:#fff; border-radius:99px;
+  flex:0 0 auto; border:1px solid var(--line-strong); background:#fff; border-radius:99px;
   padding:5px 14px; font-size:13px; color:var(--ink-soft); cursor:pointer;
 }
-.filterbar .fbtn.on{background:#212121; border-color:#212121; color:#fff;}
+.filterbar .fbtn.on{background:var(--btn-primary); border-color:var(--btn-primary); color:#fff;}
 
 /* ===== 底部彈窗 sheet ===== */
 #sheet-mask{
@@ -170,18 +185,19 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 #graph-legend .sw{width:16px; height:3px; border-radius:2px;}
 #graph-legend .swdot{width:11px; height:11px; border-radius:50%;}
 #graph-wrap{flex:1 1 auto; position:relative; overflow:hidden; touch-action:none; background:
-  radial-gradient(#ececec 1px, transparent 1px); background-size:26px 26px;}
+  radial-gradient(var(--dot) 1px, transparent 1px); background-size:26px 26px;}
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
 .gnode circle{stroke-width:2.5;}
 .gnode text{font-size:12px; font-weight:600; text-anchor:middle; pointer-events:none;}
 .gnode.dim{opacity:.22;}
 .gedge.dim{opacity:.12;}
+input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radius:6px;}
 .elabel{
   font-weight:600; text-anchor:middle; pointer-events:none;
   paint-order:stroke; stroke:#ffffff; stroke-width:3.5px; stroke-linejoin:round;
 }
-.gnode.hit circle{stroke:#252525; stroke-width:4;}
+.gnode.hit circle{stroke:var(--ink); stroke-width:4;}
 </style>
 </head>
 <body>
@@ -234,6 +250,22 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
         </div>
         <input type="file" id="import-file" accept=".json,application/json" style="display:none;">
         <div class="muted" style="margin-top:10px;">備份會產生一個 JSON 檔，請在分享面板選「儲存到檔案」→ iCloud Drive。匯入會以備份內容<b>整份取代</b>目前資料。</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:6px;">外觀</div>
+        <label>主題</label>
+        <select id="skin-select">
+          <option value="nuskin">極簡黑白（Nu Skin 風）</option>
+          <option value="paper">暖紙感（原版）</option>
+        </select>
+        <label>熟度顏色（點色塊修改）</label>
+        <div class="row">
+          <span class="muted">鐵桿</span><input type="color" class="colorpick" id="wc-hot">
+          <span class="muted">溫</span><input type="color" class="colorpick" id="wc-warm">
+          <span class="muted">冷</span><input type="color" class="colorpick" id="wc-cold">
+          <span class="grow"></span>
+          <button class="btn small" id="wc-reset">恢復預設</button>
+        </div>
       </div>
       <div class="card">
         <div style="font-weight:700; margin-bottom:6px;">資料統計</div>
@@ -290,10 +322,32 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 
 const KEY = "renmai_data_v1";
 const WARMTH = {
-  hot:  {label:"鐵桿", raw:"#c81d1d", fg:"#ffffff"},
-  warm: {label:"溫",   raw:"#252525", fg:"#ffffff"},
-  cold: {label:"冷",   raw:"#c3c9cf", fg:"#252525"},
+  hot:  {label:"鐵桿"},
+  warm: {label:"溫"},
+  cold: {label:"冷"},
 };
+const SKIN_WARMTH = {
+  nuskin: {hot:"#c81d1d", warm:"#252525", cold:"#c3c9cf"},
+  paper:  {hot:"#c2571a", warm:"#d99a2b", cold:"#7d8b99"},
+};
+function currentSkin(){ return (DB && DB.settings && DB.settings.skin) || "nuskin"; }
+function warmthColor(k){
+  const c = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
+  return c || SKIN_WARMTH[currentSkin()][k];
+}
+function fgFor(hex){
+  const n = parseInt(String(hex).slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#252525" : "#ffffff";
+}
+function applySkin(){
+  document.body.classList.toggle("skin-paper", currentSkin() === "paper");
+  ["hot", "warm", "cold"].forEach(k => {
+    const custom = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
+    if (custom) document.body.style.setProperty("--" + k, custom);
+    else document.body.style.removeProperty("--" + k);
+  });
+}
 const DEFAULT_RELTYPES = [
   {key:"intro",     label:"介紹人", directed:true,  color:"#c81d1d", builtin:true},
   {key:"family",    label:"家人",   directed:false, color:"#7a6172", builtin:true},
@@ -316,7 +370,7 @@ function esc(s){
 
 /* ---------- 資料層 ---------- */
 function emptyDB(){
-  return {version:1, customers:[], relations:[], interactions:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), lastBackupAt:null};
+  return {version:1, customers:[], relations:[], interactions:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), settings:{}, lastBackupAt:null};
 }
 function migrate(d){
   const base = emptyDB();
@@ -324,6 +378,7 @@ function migrate(d){
   base.customers = d.customers || [];
   base.relations = d.relations || [];
   base.interactions = d.interactions || [];
+  base.settings = (d.settings && typeof d.settings === "object") ? d.settings : {};
   base.lastBackupAt = d.lastBackupAt || null;
   const types = Array.isArray(d.relationTypes) && d.relationTypes.length ? d.relationTypes : DEFAULT_RELTYPES;
   // 確保內建五種一定在
@@ -795,7 +850,7 @@ function renderGraphLegend(){
   const lg = document.getElementById("graph-legend");
   lg.innerHTML =
     Object.entries(WARMTH).map(([k,v]) =>
-      `<span class="lg"><span class="swdot" style="background:${v.raw}"></span>${v.label}</span>`).join("") +
+      `<span class="lg"><span class="swdot" style="background:${warmthColor(k)}"></span>${v.label}</span>`).join("") +
     DB.relationTypes.filter(t => usedTypes.has(t.key)).map(t =>
       `<span class="lg"><span class="sw" style="background:${t.color}"></span>${esc(t.label)}</span>`).join("");
 }
@@ -818,6 +873,12 @@ function renderGraph(){
       <path d="M0 0 L10 5 L0 10 z" fill="${t.color}"/></marker>`).join("")}
   </defs>`;
 
+  // 同一對人之間的多條關係，分組後用弧線平行錯開
+  const pkey = r => r.from < r.to ? r.from + "|" + r.to : r.to + "|" + r.from;
+  const pairGroups = {};
+  DB.relations.forEach(r => { (pairGroups[pkey(r)] = pairGroups[pkey(r)] || []).push(r); });
+  Object.values(pairGroups).forEach(g => g.sort((a, b) => a.id.localeCompare(b.id)));
+
   const edges = DB.relations.map(r => {
     const a = getCustomer(r.from), b = getCustomer(r.to);
     if (!a || !b) return "";
@@ -826,27 +887,32 @@ function renderGraph(){
     const d = Math.sqrt(dx*dx + dy*dy) || 1;
     const x1 = a.pos.x + dx / d * R, y1 = a.pos.y + dy / d * R;
     const x2 = b.pos.x - dx / d * (R + (t.directed ? 6 : 0)), y2 = b.pos.y - dy / d * (R + (t.directed ? 6 : 0));
+    const grp = pairGroups[pkey(r)];
+    let off = (grp.indexOf(r) - (grp.length - 1) / 2) * 34;
+    if (r.from > r.to) off = -off;        // 弧線彎向不因 from/to 順序翻面
+    const nx = -dy / d, ny = dx / d;      // 單位法向量
+    const cx = (x1 + x2) / 2 + nx * off * 2, cy = (y1 + y2) / 2 + ny * off * 2;
+    const lx = 0.25 * (x1 + x2) + 0.5 * cx, ly = 0.25 * (y1 + y2) + 0.5 * cy;
     const dim = gHighlight && r.from !== gHighlight && r.to !== gHighlight;
-    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
     // 反向縮放：圖縮得越小，標籤字級越大補償，確保螢幕上恆約 10~11px 可讀
     const ls = Math.min(26, 10.5 / Math.max(gview.s, 0.2)).toFixed(1);
     return `<g class="gedge ${dim ? "dim" : ""}">
-      <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+      <path d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
         stroke="${t.color}" stroke-width="2.2" ${t.directed ? `marker-end="url(#arrow-${esc(t.key)})"` : ""}
         stroke-linecap="round" opacity="0.85"/>
-      <text class="elabel" x="${mx}" y="${my - 5}" font-size="${ls}" fill="${t.color}">${esc(t.label)}</text>
+      <text class="elabel" x="${lx}" y="${ly - (off ? 0 : 5)}" font-size="${ls}" fill="${t.color}">${esc(t.label)}</text>
     </g>`;
   }).join("");
 
   const nodes = DB.customers.map(c => {
-    const w = WARMTH[c.warmth] || WARMTH.warm;
+    const wc = warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
     const dim = gHighlight && c.id !== gHighlight && !DB.relations.some(r =>
       (r.from === gHighlight && r.to === c.id) || (r.to === gHighlight && r.from === c.id));
     const hit = gHighlight === c.id;
     const short = c.name.length > 3 ? c.name.slice(0, 3) : c.name;
     return `<g class="gnode ${dim ? "dim" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${c.pos.x},${c.pos.y})">
-      <circle r="${R}" fill="${w.raw}" stroke="#ffffff"/>
-      <text y="4.5" fill="${w.fg}">${esc(short)}</text>
+      <circle r="${R}" fill="${wc}" stroke="#ffffff"/>
+      <text y="4.5" fill="${fgFor(wc)}">${esc(short)}</text>
       <text y="${R + 15}" fill="#5f5f5f" font-weight="400" font-size="11">${esc(c.name.length > 3 ? c.name : "")}</text>
     </g>`;
   }).join("");
@@ -986,7 +1052,7 @@ function renderSettings(){
   rl.innerHTML = DB.relationTypes.map(t => {
     const used = DB.relations.filter(r => r.type === t.key).length;
     return `<div class="row" style="margin-bottom:6px;">
-      <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${t.color};"></span>
+      <input type="color" class="colorpick" data-ctype="${esc(t.key)}" value="${esc(t.color)}" style="width:34px;height:26px;">
       <span class="grow">${esc(t.label)}${t.directed ? "（有方向）" : ""} <span class="muted">${used ? used + " 條" : ""}</span></span>
       ${t.builtin ? "" : `<button class="btn small" data-deltype="${esc(t.key)}" ${used ? "disabled" : ""}>${used ? "使用中" : "刪"}</button>`}
     </div>`;
@@ -995,6 +1061,29 @@ function renderSettings(){
     DB.relationTypes = DB.relationTypes.filter(t => t.key !== b.dataset.deltype);
     save(); renderSettings();
   }));
+  rl.querySelectorAll("[data-ctype]").forEach(inp => inp.addEventListener("change", () => {
+    const t = DB.relationTypes.find(x => x.key === inp.dataset.ctype);
+    if (t){ t.color = inp.value; save(); }
+  }));
+
+  const skinSel = document.getElementById("skin-select");
+  skinSel.value = currentSkin();
+  skinSel.onchange = () => {
+    DB.settings.skin = skinSel.value;
+    save(); applySkin(); renderSettings();
+  };
+  ["hot", "warm", "cold"].forEach(k => {
+    const inp = document.getElementById("wc-" + k);
+    inp.value = warmthColor(k);
+    inp.onchange = () => {
+      DB.settings.warmthColors = Object.assign({}, DB.settings.warmthColors, {[k]: inp.value});
+      save(); applySkin(); renderSettings();
+    };
+  });
+  document.getElementById("wc-reset").onclick = () => {
+    delete DB.settings.warmthColors;
+    save(); applySkin(); renderSettings();
+  };
 }
 document.getElementById("btn-add-reltype").addEventListener("click", () => {
   const label = document.getElementById("new-reltype").value.trim();
@@ -1059,6 +1148,7 @@ document.getElementById("import-file").addEventListener("change", e => {
 
 /* ---------- 啟動 ---------- */
 DB = loadDB();
+applySkin();
 renderHeadStats();
 showView("home");
 window.addEventListener("resize", () => { if (currentView === "graph") renderGraph(); });
