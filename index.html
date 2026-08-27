@@ -486,10 +486,17 @@ function openSheet(title, bodyHTML){
   sheetEl.classList.add("show");
   maskEl.classList.add("show");
 }
+function refreshView(){
+  if (currentView === "home") renderHome();
+  else if (currentView === "list") renderList();
+  else if (currentView === "graph") renderGraph();
+  else if (currentView === "settings") renderSettings();
+}
 function closeSheet(){
   sheetEl.classList.remove("show");
   maskEl.classList.remove("show");
   document.getElementById("sheet-body").innerHTML = "";
+  refreshView();
 }
 document.getElementById("sheet-close").addEventListener("click", closeSheet);
 maskEl.addEventListener("click", closeSheet);
