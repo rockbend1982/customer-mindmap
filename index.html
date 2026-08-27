@@ -189,7 +189,6 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
 .gnode circle{stroke-width:2.5;}
-.gnode > text:not(.nlabel){font-size:12px; font-weight:600; text-anchor:middle; pointer-events:none;}
 .gnode.dim{opacity:.22;}
 .gedge.dim{opacity:.12;}
 input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radius:6px;}
@@ -1461,7 +1460,7 @@ function contentBounds(list, sc){
       // 組織圖的小字（直屬／線上／業績）比姓名長，不算進去最外側節點會被切掉
       halfW = Math.max(halfW, orgSubLabel(c).length * ns * 0.8 * 0.55);
     }
-    add(pt.x - halfW, pt.y - R, pt.x + halfW, pt.y + R + ns * (gMode === "org" ? 2.5 : 1.3));
+    add(pt.x - halfW, pt.y - R, pt.x + halfW, pt.y + R + ns * (gMode === "org" ? 2.9 : 1.3));
   });
   const hs = Math.min(80, 13 / Math.max(sc, 0.12));
   groupBlocks(list).forEach(b => {
@@ -1547,7 +1546,7 @@ function renderGraph(){
     const partner = isPartner(c);
     const subTxt = gMode === "org" ? orgSubLabel(c) : "";
     const sub = subTxt
-      ? `<text class="slabel" y="${R + ns * 2.0}" font-size="${(ns * 0.8).toFixed(1)}">${esc(subTxt)}</text>`
+      ? `<text class="slabel" y="${R + ns * 2.35}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${pt.x},${pt.y})">
       ${partner ? `<circle r="${R + 5}" fill="none" stroke="#1f6f8b" stroke-width="2.5" opacity="0.9"/>` : ""}
