@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>人脈圖</title>
-<meta name="theme-color" content="#faf6f0">
+<meta name="theme-color" content="#ffffff">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -14,25 +17,26 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
 :root{
-  --paper:#faf6f0; --card:#ffffff; --ink:#3a3128; --ink-soft:#6f6457;
-  --line:#e7ddd0; --accent:#c2571a; --accent-soft:#f4e3d5;
-  --hot:#c2571a; --warm:#d99a2b; --cold:#7d8b99;
-  --hot-bg:#f7e2d3; --warm-bg:#f8ecd2; --cold-bg:#e5eaef;
-  --danger:#b3372f; --danger-bg:#f6e0de;
+  --paper:#ffffff; --card:#ffffff; --ink:#252525; --ink-soft:#6c757d;
+  --line:#e9e9e9; --accent:#252525; --brand-red:#c81d1d; --accent-soft:#ededed;
+  --hot:#c81d1d; --warm:#252525; --cold:#c3c9cf;
+  --hot-bg:#f9e4e4; --warm-bg:#ededed; --cold-bg:#f2f4f5;
+  --danger:#a80b0b; --danger-bg:#faeaea;
   --nav-h:58px;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0; padding:0; height:100%;}
 body{
   background:var(--paper); color:var(--ink);
-  font-family:"PingFang TC","Microsoft JhengHei UI","Noto Sans CJK TC",system-ui,sans-serif;
+  font-family:"Inter","PingFang TC","Microsoft JhengHei UI","Noto Sans CJK TC",system-ui,sans-serif;
   font-size:16px; line-height:1.55;
   overscroll-behavior:none;
 }
+.serif{font-family:"Lora","Songti TC","Noto Serif TC",serif;}
 button{font-family:inherit;}
 input,textarea,select{
   font-family:inherit; font-size:16px; color:var(--ink);
-  background:#fff; border:1px solid var(--line); border-radius:10px;
+  background:#fff; border:1px solid #d9d9d9; border-radius:0;
   padding:10px 12px; width:100%;
 }
 input:focus,textarea:focus,select:focus{outline:2px solid var(--accent); outline-offset:0; border-color:var(--accent);}
@@ -46,7 +50,7 @@ header{
   border-bottom:1px solid var(--line); background:var(--paper);
   flex:0 0 auto;
 }
-header h1{font-size:20px; margin:0; letter-spacing:1px;}
+header h1{font-size:21px; margin:0; letter-spacing:3px; font-family:"Lora","Songti TC","Noto Serif TC",serif; font-weight:500;}
 header .sub{font-size:12px; color:var(--ink-soft);}
 main{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);}
 .view{display:none; padding:16px;}
@@ -69,32 +73,32 @@ nav#tabbar button.on{color:var(--accent); font-weight:600;}
 nav#tabbar svg{width:22px; height:22px;}
 
 /* ===== 通用元件 ===== */
-.card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px;}
+.card{background:var(--card); border:1px solid #ececec; border-radius:0; padding:16px; margin-bottom:14px;}
 .btn{
-  display:inline-block; border:1px solid var(--line); background:#fff; color:var(--ink);
-  border-radius:10px; padding:10px 16px; font-size:15px; cursor:pointer;
+  display:inline-block; border:1px solid #252525; background:#fff; color:var(--ink);
+  border-radius:999px; padding:10px 18px; font-size:15px; cursor:pointer; font-weight:500;
 }
-.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
-.btn.danger{background:var(--danger); border-color:var(--danger); color:#fff;}
-.btn.ghost{border-color:transparent; color:var(--accent);}
-.btn.small{padding:5px 10px; font-size:13px; border-radius:8px;}
+.btn.primary{background:#212121; border-color:#212121; color:#fff; font-weight:600;}
+.btn.danger{background:var(--brand-red); border-color:var(--brand-red); color:#fff;}
+.btn.ghost{border-color:transparent; color:var(--brand-red);}
+.btn.small{padding:5px 12px; font-size:13px; border-radius:999px;}
 .btn:active{opacity:.75;}
 .row{display:flex; gap:10px; align-items:center;}
 .row .grow{flex:1;}
 .chip{
-  display:inline-block; font-size:12px; padding:2px 9px; border-radius:99px;
-  background:var(--accent-soft); color:var(--accent); margin:0 4px 4px 0;
+  display:inline-block; font-size:12px; padding:2px 10px; border-radius:99px;
+  background:var(--accent-soft); color:var(--ink); margin:0 4px 4px 0; font-weight:500;
 }
-.chip.tag{background:#efe9df; color:var(--ink-soft);}
-.warmth-hot{background:var(--hot-bg); color:var(--hot);}
-.warmth-warm{background:var(--warm-bg); color:#9a6b12;}
-.warmth-cold{background:var(--cold-bg); color:#54626f;}
+.chip.tag{background:#f5f5f5; color:var(--ink-soft);}
+.warmth-hot{background:var(--hot-bg); color:var(--brand-red);}
+.warmth-warm{background:var(--warm-bg); color:#252525;}
+.warmth-cold{background:var(--cold-bg); color:#6c757d;}
 .muted{color:var(--ink-soft); font-size:13px;}
 .empty{
   text-align:center; color:var(--ink-soft); padding:36px 20px; font-size:14px;
   border:1px dashed var(--line); border-radius:14px; background:#fffdf9;
 }
-h2{font-size:15px; color:var(--ink-soft); font-weight:600; margin:20px 0 8px; letter-spacing:.5px;}
+h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; letter-spacing:2px;}
 .banner{
   background:var(--danger-bg); color:var(--danger);
   border:1px solid #e6c3c0; border-radius:12px;
@@ -106,15 +110,15 @@ h2{font-size:15px; color:var(--ink-soft); font-weight:600; margin:20px 0 8px; le
 /* 客戶列表項 */
 .person{
   display:flex; align-items:center; gap:12px;
-  background:var(--card); border:1px solid var(--line); border-radius:12px;
-  padding:10px 12px; margin-bottom:8px; cursor:pointer;
+  background:var(--card); border:1px solid #ececec; border-radius:0;
+  padding:12px; margin-bottom:8px; cursor:pointer;
 }
 .person .dot{
   flex:0 0 auto; width:40px; height:40px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
   font-size:15px; font-weight:600; color:#fff;
 }
-.dot-hot{background:var(--hot);} .dot-warm{background:var(--warm);} .dot-cold{background:var(--cold);}
+.dot-hot{background:var(--hot);} .dot-warm{background:var(--warm);} .dot-cold{background:var(--cold); color:#252525;}
 .person .info{flex:1; min-width:0;}
 .person .name{font-weight:600;}
 .person .meta{font-size:12px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -128,10 +132,10 @@ h2{font-size:15px; color:var(--ink-soft); font-weight:600; margin:20px 0 8px; le
 /* 篩選列 */
 .filterbar{display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; -webkit-overflow-scrolling:touch;}
 .filterbar .fbtn{
-  flex:0 0 auto; border:1px solid var(--line); background:#fff; border-radius:99px;
-  padding:5px 13px; font-size:13px; color:var(--ink-soft); cursor:pointer;
+  flex:0 0 auto; border:1px solid #d9d9d9; background:#fff; border-radius:99px;
+  padding:5px 14px; font-size:13px; color:var(--ink-soft); cursor:pointer;
 }
-.filterbar .fbtn.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+.filterbar .fbtn.on{background:#212121; border-color:#212121; color:#fff;}
 
 /* ===== 底部彈窗 sheet ===== */
 #sheet-mask{
@@ -166,14 +170,14 @@ h2{font-size:15px; color:var(--ink-soft); font-weight:600; margin:20px 0 8px; le
 #graph-legend .sw{width:16px; height:3px; border-radius:2px;}
 #graph-legend .swdot{width:11px; height:11px; border-radius:50%;}
 #graph-wrap{flex:1 1 auto; position:relative; overflow:hidden; touch-action:none; background:
-  radial-gradient(#eee4d6 1px, transparent 1px); background-size:26px 26px;}
+  radial-gradient(#ececec 1px, transparent 1px); background-size:26px 26px;}
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
 .gnode circle{stroke-width:2.5;}
-.gnode text{font-size:12px; font-weight:600; fill:#fff; text-anchor:middle; pointer-events:none;}
+.gnode text{font-size:12px; font-weight:600; text-anchor:middle; pointer-events:none;}
 .gnode.dim{opacity:.22;}
 .gedge.dim{opacity:.12;}
-.gnode.hit circle{stroke:#3a3128; stroke-width:4;}
+.gnode.hit circle{stroke:#252525; stroke-width:4;}
 </style>
 </head>
 <body>
@@ -282,18 +286,18 @@ h2{font-size:15px; color:var(--ink-soft); font-weight:600; margin:20px 0 8px; le
 
 const KEY = "renmai_data_v1";
 const WARMTH = {
-  hot:  {label:"鐵桿", color:"var(--hot)",  raw:"#c2571a"},
-  warm: {label:"溫",   color:"var(--warm)", raw:"#d99a2b"},
-  cold: {label:"冷",   color:"var(--cold)", raw:"#7d8b99"},
+  hot:  {label:"鐵桿", raw:"#c81d1d", fg:"#ffffff"},
+  warm: {label:"溫",   raw:"#252525", fg:"#ffffff"},
+  cold: {label:"冷",   raw:"#c3c9cf", fg:"#252525"},
 };
 const DEFAULT_RELTYPES = [
-  {key:"intro",     label:"介紹人", directed:true,  color:"#c2571a", builtin:true},
-  {key:"family",    label:"家人",   directed:false, color:"#8a4f9e", builtin:true},
-  {key:"friend",    label:"朋友",   directed:false, color:"#2e7d32", builtin:true},
-  {key:"colleague", label:"同事",   directed:false, color:"#1565c0", builtin:true},
-  {key:"club",      label:"同社團", directed:false, color:"#00838f", builtin:true},
+  {key:"intro",     label:"介紹人", directed:true,  color:"#c81d1d", builtin:true},
+  {key:"family",    label:"家人",   directed:false, color:"#7a6172", builtin:true},
+  {key:"friend",    label:"朋友",   directed:false, color:"#5c7a68", builtin:true},
+  {key:"colleague", label:"同事",   directed:false, color:"#48606e", builtin:true},
+  {key:"club",      label:"同社團", directed:false, color:"#8c7a52", builtin:true},
 ];
-const CUSTOM_COLORS = ["#ad1457","#5d4037","#37474f","#7b8a1e","#4527a0","#bf6b00"];
+const CUSTOM_COLORS = ["#7a2e4e","#4f4a68","#6e5a3f","#3f5a5e","#5b4632","#70473e"];
 
 let DB = null;
 
@@ -509,7 +513,7 @@ function openDetail(id){
   const rels = relationsOf(id);
   const logs = interactionsOf(id);
   const fields = [
-    ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--accent)">${esc(c.phone)}</a>` : ""],
+    ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--brand-red)">${esc(c.phone)}</a>` : ""],
     ["公司／職業", esc(c.company)],
     ["怎麼認識的", esc(c.source)],
   ].filter(f => f[1]);
@@ -797,7 +801,7 @@ function renderGraph(){
   const wrap = document.getElementById("graph-wrap");
   renderGraphLegend();
   if (!DB.customers.length){
-    svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="#8a7f70" font-size="14">還沒有客戶，先去「名單」新增。</text>`;
+    svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="#8a8a8a" font-size="14">還沒有客戶，先去「名單」新增。</text>`;
     return;
   }
   if (!gview.inited){ fitView(); gview.inited = true; }
@@ -830,9 +834,9 @@ function renderGraph(){
     const hit = gHighlight === c.id;
     const short = c.name.length > 3 ? c.name.slice(0, 3) : c.name;
     return `<g class="gnode ${dim ? "dim" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${c.pos.x},${c.pos.y})">
-      <circle r="${R}" fill="${w.raw}" stroke="#fffdf9"/>
-      <text y="4.5">${esc(short)}</text>
-      <text y="${R + 15}" fill="#5c5346" font-weight="400" font-size="11">${esc(c.name.length > 3 ? c.name : "")}</text>
+      <circle r="${R}" fill="${w.raw}" stroke="#ffffff"/>
+      <text y="4.5" fill="${w.fg}">${esc(short)}</text>
+      <text y="${R + 15}" fill="#5f5f5f" font-weight="400" font-size="11">${esc(c.name.length > 3 ? c.name : "")}</text>
     </g>`;
   }).join("");
 
