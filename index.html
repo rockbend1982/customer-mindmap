@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>人脈圖</title>
+<title>織網</title>
 <meta name="theme-color" content="#ffffff">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="人脈圖">
+<meta name="apple-mobile-web-app-title" content="織網">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -225,7 +225,7 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
 <body>
 <div id="app">
   <header>
-    <h1>人脈圖</h1>
+    <h1>織網</h1>
     <span class="sub" id="head-stats"></span>
   </header>
   <main id="main">
@@ -306,7 +306,7 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
         </label>
       </div>
       <div class="card muted">
-        人脈圖 v1.0 — 資料只存在這台裝置的瀏覽器裡，不會上傳。<br>
+        織網 v1.1 — 資料只存在這台裝置的瀏覽器裡，不會上傳。<br>
         請固定用同一個入口開啟（加到主畫面後就都用主畫面圖示），並養成每週備份的習慣。
       </div>
     </section>
@@ -340,7 +340,7 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
 <script>
 "use strict";
 /* =========================================================
-   人脈圖 — 個人客戶關係心智圖（單檔、本機儲存、不上傳）
+   織網 — 個人客戶關係心智圖（單檔、本機儲存、不上傳）
    ========================================================= */
 
 const KEY = "renmai_data_v1";
@@ -1776,12 +1776,12 @@ document.getElementById("btn-add-reltype").addEventListener("click", () => {
 document.getElementById("btn-export").addEventListener("click", async () => {
   const stamp = todayStr();
   const json = JSON.stringify(DB, null, 2);
-  const filename = `人脈圖備份-${stamp}.json`;
+  const filename = `織網備份-${stamp}.json`;
   const file = new File([json], filename, {type:"application/json"});
   let done = false;
   if (navigator.canShare && navigator.canShare({files:[file]})){
     try {
-      await navigator.share({files:[file], title:"人脈圖備份"});
+      await navigator.share({files:[file], title:"織網備份"});
       done = true;
     } catch(e){
       if (e && e.name === "AbortError") return; // 使用者取消，不算備份
@@ -1811,7 +1811,7 @@ document.getElementById("import-file").addEventListener("change", e => {
   reader.onload = () => {
     let incoming;
     try { incoming = migrate(JSON.parse(reader.result)); }
-    catch(err){ alert("這個檔案不是有效的人脈圖備份：" + err.message); return; }
+    catch(err){ alert("這個檔案不是有效的織網備份：" + err.message); return; }
     if (!confirm(`備份內有 ${incoming.customers.length} 位客戶、${incoming.interactions.length} 筆紀錄。\n將整份取代目前資料（目前 ${DB.customers.length} 位客戶）。確定匯入？`)) return;
     DB = incoming;
     save(); gview.inited = false;

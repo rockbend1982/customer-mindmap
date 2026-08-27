@@ -1,7 +1,7 @@
 {
-  "name": "人脈圖",
-  "short_name": "人脈圖",
-  "description": "個人客戶關係心智圖，資料只存在本機",
+  "name": "織網",
+  "short_name": "織網",
+  "description": "織網 — 個人客戶關係心智圖，資料只存在本機",
   "lang": "zh-Hant",
   "start_url": "./",
   "scope": "./",

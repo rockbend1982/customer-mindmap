@@ -1,5 +1,5 @@
-/* 人脈圖 service worker — 讓加到主畫面後可離線開啟 */
-const CACHE = "renmai-v1.0.0";
+/* 織網 service worker — 讓加到主畫面後可離線開啟 */
+const CACHE = "zhiwang-v1.1.0";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {

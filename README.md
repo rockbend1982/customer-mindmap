@@ -1,4 +1,4 @@
-# 人脈圖（customer-mindmap）
+# 織網（customer-mindmap）
 
 個人客戶關係心智圖。單檔網頁 App，手機優先，**資料只存在裝置的瀏覽器本機儲存，不上傳任何伺服器**。程式碼公開（GitHub Pages 部署用），但程式裡不含任何客戶資料。
 
