@@ -194,6 +194,14 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 .gedge.dim{opacity:.12;}
 input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radius:6px;}
 .rename{text-decoration:underline dotted; text-underline-offset:3px; cursor:pointer;}
+.gnode.sleep{opacity:.45;}
+.gnode.sleep circle{stroke:#9aa2a9; stroke-dasharray:4 3;}
+#focus-bar{
+  position:absolute; left:10px; right:10px; bottom:12px; display:none;
+  align-items:center; gap:8px; flex-wrap:wrap;
+  background:var(--card); border:1px solid var(--card-line); border-radius:12px;
+  padding:10px 12px; box-shadow:0 4px 18px rgba(0,0,0,.10);
+}
 .elabel{
   font-weight:600; text-anchor:middle; pointer-events:none;
   paint-order:stroke; stroke:#ffffff; stroke-width:3.5px; stroke-linejoin:round;
@@ -218,6 +226,8 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
         <button class="btn primary grow" id="btn-quick-log">記一筆互動</button>
         <button class="btn grow" id="btn-quick-add">新增客戶</button>
       </div>
+      <div id="home-insights" style="margin-top:14px;"></div>
+      <div id="home-dormant"></div>
       <h2>最近互動</h2>
       <div id="home-recent"></div>
     </section>
@@ -236,8 +246,9 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
         <input type="search" id="graph-search" placeholder="找人並定位…" autocomplete="off">
         <button class="btn small" id="btn-relayout">整理版面</button>
       </div>
+      <div class="filterbar" id="graph-filter" style="padding:0 12px 4px;"></div>
       <div id="graph-legend"></div>
-      <div id="graph-wrap"><svg id="graph-svg"></svg></div>
+      <div id="graph-wrap"><svg id="graph-svg"></svg><div id="focus-bar"></div></div>
     </section>
 
     <!-- 設定 -->
@@ -262,6 +273,8 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
         <label>熟度顏色（點色塊修改）</label>
         <div class="row" id="warmth-row"></div>
         <div class="muted" style="margin-top:8px;">點虛線底線的名稱可以改名。</div>
+        <label>沉睡門檻（幾天沒聯絡算沉睡）</label>
+        <input type="number" id="dormant-days" min="1" max="365" inputmode="numeric">
       </div>
       <div class="card">
         <div style="font-weight:700; margin-bottom:6px;">資料統計</div>
@@ -517,7 +530,49 @@ function renderHome(){
         <div class="txt">${esc(i.text)}</div></div>`;
     }).join("");
   }
+  renderHomeInsights();
   renderHomeSearch();
+}
+function renderHomeInsights(){
+  const box = document.getElementById("home-insights");
+  const dbox = document.getElementById("home-dormant");
+  if (!DB.customers.length){ box.innerHTML = ""; dbox.innerHTML = ""; return; }
+  const relCount = {};
+  DB.customers.forEach(c => relCount[c.id] = 0);
+  DB.relations.forEach(r => {
+    if (relCount[r.from] !== undefined) relCount[r.from]++;
+    if (relCount[r.to] !== undefined) relCount[r.to]++;
+  });
+  const hub = DB.customers.slice().sort((a, b) => relCount[b.id] - relCount[a.id])[0];
+  const introOut = {};
+  DB.relations.filter(r => r.type === "intro").forEach(r => introOut[r.from] = (introOut[r.from] || 0) + 1);
+  const engineId = Object.keys(introOut).sort((a, b) => introOut[b] - introOut[a])[0];
+  const engine = engineId ? getCustomer(engineId) : null;
+  const islands = DB.customers.filter(c => !relCount[c.id]);
+  const hotDorm = DB.customers.filter(c => c.warmth === "hot")
+    .map(c => ({c, d: dormantInfo(c.id)}))
+    .sort((x, y) => (y.d.days == null ? 1e9 : y.d.days) - (x.d.days == null ? 1e9 : x.d.days))[0];
+  const line = (label, html) =>
+    `<div class="row" style="margin-bottom:6px; align-items:baseline;"><span class="muted" style="flex:0 0 6.5em;">${label}</span><span class="grow">${html}</span></div>`;
+  const nameLink = c => `<span data-open="${c.id}" style="font-weight:600; cursor:pointer;">${esc(c.name)}</span>`;
+  const rows = [
+    hub && relCount[hub.id] ? line("樞紐人物", nameLink(hub) + ` <span class="muted">${relCount[hub.id]} 條連結</span>`) : "",
+    engine ? line("轉介發動機", nameLink(engine) + ` <span class="muted">介紹了 ${introOut[engine.id]} 人</span>`) : "",
+    islands.length ? line("孤島客戶", islands.slice(0, 3).map(nameLink).join("、") + (islands.length > 3 ? ` <span class="muted">…共 ${islands.length} 位</span>` : "")) : "",
+    hotDorm && hotDorm.d.dormant ? line("該回溫的" + esc(warmthLabel("hot")), nameLink(hotDorm.c) + ` <span class="muted">${hotDorm.d.days == null ? "從未互動" : hotDorm.d.days + " 天沒聯絡"}</span>`) : "",
+  ].filter(Boolean);
+  box.innerHTML = rows.length
+    ? `<div class="card"><div style="font-weight:700; margin-bottom:8px;">網絡洞察</div>${rows.join("")}</div>` : "";
+
+  const dorm = DB.customers.map(c => ({c, d: dormantInfo(c.id)})).filter(x => x.d.dormant)
+    .sort((x, y) => (y.d.days == null ? 1e9 : y.d.days) - (x.d.days == null ? 1e9 : x.d.days));
+  dbox.innerHTML = dorm.length
+    ? `<h2>該聯絡了（超過 ${dormantLimit()} 天，共 ${dorm.length} 位）</h2>` +
+      dorm.slice(0, 5).map(x => `<div class="row" style="margin-bottom:6px;">
+        <span class="grow" data-open="${x.c.id}" style="cursor:pointer;"><b>${esc(x.c.name)}</b>
+          <span class="chip warmth-${x.c.warmth}" style="margin:0 0 0 4px;">${esc(warmthLabel(x.c.warmth))}</span></span>
+        <span class="muted">${x.d.days == null ? "從未互動" : x.d.days + " 天"}</span></div>`).join("")
+    : "";
 }
 function renderHomeSearch(){
   const q = document.getElementById("home-search").value;
@@ -769,7 +824,23 @@ function openAddRelation(id){
 
 /* ---------- 關係圖 ---------- */
 const gview = {tx:0, ty:0, s:1, inited:false};
-let gHighlight = null;
+let gMode = "net";          // net=網絡 intro=轉介鏈
+let gFocus = null;          // 聚焦的客戶 id
+let gFocusDepth = 1;        // 1=直接關係 2=第二層
+let gFilterWarmth = null;
+let gFilterTag = null;
+let gIntroPos = {};         // 轉介鏈模式的臨時座標（不寫回 pos）
+
+function dormantLimit(){
+  const v = DB.settings && parseInt(DB.settings.dormantDays, 10);
+  return (v >= 1 && v <= 365) ? v : 30;
+}
+function dormantInfo(id){
+  const lc = lastContact(id);
+  if (!lc) return {days:null, dormant:true};
+  const days = Math.max(0, Math.floor((Date.now() - new Date(lc + "T00:00:00").getTime()) / 86400000));
+  return {days, dormant: days > dormantLimit()};
+}
 
 function ensurePositions(){
   const need = DB.customers.filter(c => !c.pos);
@@ -778,11 +849,9 @@ function ensurePositions(){
   save();
 }
 function forceLayout(movable){
-  // movable：要重新排的節點；其餘視為固定
   const all = DB.customers;
   if (!all.length) return;
   const fixedSet = new Set(all.filter(c => c.pos && !movable.includes(c)).map(c => c.id));
-  // 初始位置：固定的用原位，其他繞質心撒開
   let cx = 0, cy = 0, n = 0;
   all.forEach(c => { if (c.pos){ cx += c.pos.x; cy += c.pos.y; n++; } });
   if (n){ cx /= n; cy /= n; } else { cx = 0; cy = 0; }
@@ -790,17 +859,16 @@ function forceLayout(movable){
   all.forEach((c, i) => {
     if (c.pos && fixedSet.has(c.id)) pos[c.id] = {x:c.pos.x, y:c.pos.y};
     else {
-      const ang = i * 2.399963; // 黃金角，避免重疊
+      const ang = i * 2.399963;
       const rad = 60 + 26 * Math.sqrt(i + 1);
       pos[c.id] = {x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang)};
     }
   });
-  // Fruchterman-Reingold：K = 理想邊長（節點直徑 54 的近 3 倍，確保圓不重疊、線段夠長）
+  // Fruchterman-Reingold：K = 理想邊長
   const K = 150;
   for (let it = 0; it < 220; it++){
     const disp = {};
     all.forEach(c => disp[c.id] = {x:0, y:0});
-    // 斥力（K^2 / d）
     for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++){
       const a = all[i], b = all[j];
       let dx = pos[a.id].x - pos[b.id].x, dy = pos[a.id].y - pos[b.id].y;
@@ -811,7 +879,6 @@ function forceLayout(movable){
       disp[a.id].x += dx / d * f; disp[a.id].y += dy / d * f;
       disp[b.id].x -= dx / d * f; disp[b.id].y -= dy / d * f;
     }
-    // 引力（沿關係線，d^2 / K；與斥力的平衡距離即為 K）
     DB.relations.forEach(r => {
       const pa = pos[r.from], pb = pos[r.to];
       if (!pa || !pb) return;
@@ -821,7 +888,6 @@ function forceLayout(movable){
       disp[r.from].x -= dx / d * f; disp[r.from].y -= dy / d * f;
       disp[r.to].x += dx / d * f; disp[r.to].y += dy / d * f;
     });
-    // 向質心微聚
     all.forEach(c => {
       disp[c.id].x += (cx - pos[c.id].x) * 0.02;
       disp[c.id].y += (cy - pos[c.id].y) * 0.02;
@@ -837,20 +903,104 @@ function forceLayout(movable){
   all.forEach(c => { if (!fixedSet.has(c.id)) c.pos = {x:Math.round(pos[c.id].x), y:Math.round(pos[c.id].y)}; });
 }
 
-function fitView(){
+function nodePos(c){ return gMode === "intro" ? gIntroPos[c.id] : c.pos; }
+
+function visibleCustomers(){
+  let list = DB.customers;
+  if (gFilterWarmth) list = list.filter(c => c.warmth === gFilterWarmth);
+  if (gFilterTag) list = list.filter(c => (c.tags || []).includes(gFilterTag));
+  if (gMode === "intro"){
+    const inIntro = new Set();
+    DB.relations.filter(r => r.type === "intro").forEach(r => { inIntro.add(r.from); inIntro.add(r.to); });
+    list = list.filter(c => inIntro.has(c.id));
+  }
+  return list;
+}
+function focusSetOf(rels){
+  if (!gFocus) return null;
+  const set = new Set([gFocus]);
+  for (let depth = 0; depth < gFocusDepth; depth++){
+    const add = [];
+    rels.forEach(r => {
+      if (set.has(r.from) && !set.has(r.to)) add.push(r.to);
+      if (set.has(r.to) && !set.has(r.from)) add.push(r.from);
+    });
+    add.forEach(id => set.add(id));
+  }
+  return set;
+}
+function layoutIntroTree(vis, rels){
+  const ids = vis.map(c => c.id);
+  const idSet = new Set(ids);
+  const parent = {};
+  rels.forEach(r => { if (parent[r.to] === undefined && r.from !== r.to) parent[r.to] = r.from; });
+  const children = {};
+  ids.forEach(id => children[id] = []);
+  ids.forEach(id => { const pa = parent[id]; if (pa !== undefined && idSet.has(pa)) children[pa].push(id); });
+  const roots = ids.filter(id => parent[id] === undefined || !idSet.has(parent[id]));
+  const XS = 150, YS = 160;
+  let cursor = 0;
+  const pos = {};
+  const seen = new Set();
+  function place(id, depth){
+    if (seen.has(id)) return;
+    seen.add(id);
+    const kids = children[id];
+    if (!kids.length){ pos[id] = {x: cursor * XS, y: depth * YS}; cursor++; return; }
+    kids.forEach(k => place(k, depth + 1));
+    const xs = kids.filter(k => pos[k]).map(k => pos[k].x);
+    pos[id] = {x: xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : (cursor++) * XS, y: depth * YS};
+  }
+  roots.forEach(r => { place(r, 0); cursor++; });
+  ids.forEach(id => { if (!pos[id]){ pos[id] = {x: cursor * XS, y: 0}; cursor++; } });
+  return pos;
+}
+
+function fitViewTo(list){
   const wrap = document.getElementById("graph-wrap");
   const W = wrap.clientWidth, H = wrap.clientHeight;
-  if (!DB.customers.length || !W) return;
+  if (!list.length || !W) return;
   let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-  DB.customers.forEach(c => {
-    minX = Math.min(minX, c.pos.x); maxX = Math.max(maxX, c.pos.x);
-    minY = Math.min(minY, c.pos.y); maxY = Math.max(maxY, c.pos.y);
+  list.forEach(c => {
+    const pt = nodePos(c);
+    minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+    minY = Math.min(minY, pt.y); maxY = Math.max(maxY, pt.y);
   });
   const pad = 70;
-  const s = Math.min(1.4, Math.min(W / (maxX - minX + pad * 2 || 1), H / (maxY - minY + pad * 2 || 1)));
-  gview.s = Math.max(0.2, s);
+  const sc = Math.min(1.4, Math.min(W / (maxX - minX + pad * 2 || 1), H / (maxY - minY + pad * 2 || 1)));
+  gview.s = Math.max(0.2, sc);
   gview.tx = W / 2 - (minX + maxX) / 2 * gview.s;
   gview.ty = H / 2 - (minY + maxY) / 2 * gview.s;
+}
+function centerOn(c){
+  const wrap = document.getElementById("graph-wrap");
+  const pt = nodePos(c);
+  if (!pt) return;
+  gview.tx = wrap.clientWidth / 2 - pt.x * gview.s;
+  gview.ty = wrap.clientHeight / 2 - pt.y * gview.s;
+}
+
+function renderGraphChips(){
+  const el = document.getElementById("graph-filter");
+  const tags = [...new Set(DB.customers.flatMap(c => c.tags || []))].sort().slice(0, 8);
+  el.innerHTML =
+    `<button class="fbtn ${gMode === "net" ? "on" : ""}" data-gmode="net">網絡</button>` +
+    `<button class="fbtn ${gMode === "intro" ? "on" : ""}" data-gmode="intro">轉介鏈</button>` +
+    `<span style="flex:0 0 1px; background:var(--line); align-self:stretch;"></span>` +
+    ["hot", "warm", "cold"].map(k =>
+      `<button class="fbtn ${gFilterWarmth === k ? "on" : ""}" data-gwarm="${k}">${esc(warmthLabel(k))}</button>`).join("") +
+    tags.map(t => `<button class="fbtn ${gFilterTag === t ? "on" : ""}" data-gtag="${esc(t)}">#${esc(t)}</button>`).join("");
+  el.querySelectorAll("[data-gmode]").forEach(b => b.addEventListener("click", () => {
+    gMode = b.dataset.gmode; gFocus = null; gFocusDepth = 1; gview.inited = false; renderGraph();
+  }));
+  el.querySelectorAll("[data-gwarm]").forEach(b => b.addEventListener("click", () => {
+    gFilterWarmth = gFilterWarmth === b.dataset.gwarm ? null : b.dataset.gwarm;
+    gview.inited = false; renderGraph();
+  }));
+  el.querySelectorAll("[data-gtag]").forEach(b => b.addEventListener("click", () => {
+    gFilterTag = gFilterTag === b.dataset.gtag ? null : b.dataset.gtag;
+    gview.inited = false; renderGraph();
+  }));
 }
 
 function renderGraphLegend(){
@@ -859,20 +1009,52 @@ function renderGraphLegend(){
   lg.innerHTML =
     Object.keys(WARMTH).map(k =>
       `<span class="lg"><span class="swdot" style="background:${warmthColor(k)}"></span>${esc(warmthLabel(k))}</span>`).join("") +
-    DB.relationTypes.filter(t => usedTypes.has(t.key)).map(t =>
+    DB.relationTypes.filter(t => usedTypes.has(t.key) && (gMode === "net" || t.key === "intro")).map(t =>
       `<span class="lg"><span class="sw" style="background:${t.color}"></span>${esc(t.label)}</span>`).join("");
 }
 
+function updateFocusBar(id){
+  const bar = document.getElementById("focus-bar");
+  const c = id ? getCustomer(id) : null;
+  if (!c){ bar.style.display = "none"; bar.innerHTML = ""; return; }
+  const dz = dormantInfo(id);
+  bar.style.display = "flex";
+  bar.innerHTML = `<span style="font-weight:700;">${esc(c.name)}</span>
+    <span class="chip warmth-${c.warmth}" style="margin:0;">${esc(warmthLabel(c.warmth))}</span>
+    <span class="muted grow">${dz.days == null ? "從未互動" : "上次聯絡 " + dz.days + " 天前"}</span>
+    <button class="btn small" id="fb-detail">詳情</button>
+    <button class="btn small" id="fb-depth">${gFocusDepth === 1 ? "第二層" : "收回"}</button>
+    <button class="btn small" id="fb-close">關閉</button>`;
+  document.getElementById("fb-detail").onclick = () => openDetail(id);
+  document.getElementById("fb-depth").onclick = () => { gFocusDepth = gFocusDepth === 1 ? 2 : 1; renderGraph(); };
+  document.getElementById("fb-close").onclick = () => { gFocus = null; gFocusDepth = 1; renderGraph(); };
+}
+
 function renderGraph(){
-  ensurePositions();
   const svg = document.getElementById("graph-svg");
   const wrap = document.getElementById("graph-wrap");
+  renderGraphChips();
   renderGraphLegend();
-  if (!DB.customers.length){
-    svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="#8a8a8a" font-size="14">還沒有客戶，先去「名單」新增。</text>`;
+  const vis = visibleCustomers();
+  if (gFocus && !vis.some(c => c.id === gFocus)){ gFocus = null; gFocusDepth = 1; }
+  if (!vis.length){
+    const msg = DB.customers.length
+      ? (gMode === "intro" ? "還沒有任何「介紹人」關係。" : "沒有符合篩選的客戶。")
+      : "還沒有客戶，先去「名單」新增。";
+    svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="#8a8a8a" font-size="14">${msg}</text>`;
+    updateFocusBar(null);
     return;
   }
-  if (!gview.inited){ fitView(); gview.inited = true; }
+  const visSet = new Set(vis.map(c => c.id));
+  let rels = DB.relations.filter(r => visSet.has(r.from) && visSet.has(r.to));
+  if (gMode === "intro"){
+    rels = rels.filter(r => r.type === "intro");
+    gIntroPos = layoutIntroTree(vis, rels);
+  } else {
+    ensurePositions();
+  }
+  const fset = focusSetOf(rels);
+  if (!gview.inited){ fitViewTo(vis); gview.inited = true; }
 
   const R = 27;
   const defs = `<defs>
@@ -881,28 +1063,27 @@ function renderGraph(){
       <path d="M0 0 L10 5 L0 10 z" fill="${t.color}"/></marker>`).join("")}
   </defs>`;
 
-  // 同一對人之間的多條關係，分組後用弧線平行錯開
   const pkey = r => r.from < r.to ? r.from + "|" + r.to : r.to + "|" + r.from;
   const pairGroups = {};
-  DB.relations.forEach(r => { (pairGroups[pkey(r)] = pairGroups[pkey(r)] || []).push(r); });
+  rels.forEach(r => { (pairGroups[pkey(r)] = pairGroups[pkey(r)] || []).push(r); });
   Object.values(pairGroups).forEach(g => g.sort((a, b) => a.id.localeCompare(b.id)));
 
-  const edges = DB.relations.map(r => {
+  const edges = rels.map(r => {
     const a = getCustomer(r.from), b = getCustomer(r.to);
     if (!a || !b) return "";
+    const pa = nodePos(a), pb = nodePos(b);
     const t = relType(r.type);
-    const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+    const dx = pb.x - pa.x, dy = pb.y - pa.y;
     const d = Math.sqrt(dx*dx + dy*dy) || 1;
-    const x1 = a.pos.x + dx / d * R, y1 = a.pos.y + dy / d * R;
-    const x2 = b.pos.x - dx / d * (R + (t.directed ? 6 : 0)), y2 = b.pos.y - dy / d * (R + (t.directed ? 6 : 0));
+    const x1 = pa.x + dx / d * R, y1 = pa.y + dy / d * R;
+    const x2 = pb.x - dx / d * (R + (t.directed ? 6 : 0)), y2 = pb.y - dy / d * (R + (t.directed ? 6 : 0));
     const grp = pairGroups[pkey(r)];
     let off = (grp.indexOf(r) - (grp.length - 1) / 2) * 34;
-    if (r.from > r.to) off = -off;        // 弧線彎向不因 from/to 順序翻面
-    const nx = -dy / d, ny = dx / d;      // 單位法向量
+    if (r.from > r.to) off = -off;
+    const nx = -dy / d, ny = dx / d;
     const cx = (x1 + x2) / 2 + nx * off * 2, cy = (y1 + y2) / 2 + ny * off * 2;
     const lx = 0.25 * (x1 + x2) + 0.5 * cx, ly = 0.25 * (y1 + y2) + 0.5 * cy;
-    const dim = gHighlight && r.from !== gHighlight && r.to !== gHighlight;
-    // 反向縮放：圖縮得越小，標籤字級越大補償，確保螢幕上恆約 10~11px 可讀
+    const dim = fset && !(fset.has(r.from) && fset.has(r.to));
     const ls = Math.min(26, 10.5 / Math.max(gview.s, 0.2)).toFixed(1);
     return `<g class="gedge ${dim ? "dim" : ""}">
       <path d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
@@ -912,13 +1093,14 @@ function renderGraph(){
     </g>`;
   }).join("");
 
-  const nodes = DB.customers.map(c => {
+  const nodes = vis.map(c => {
+    const pt = nodePos(c);
     const wc = warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
-    const dim = gHighlight && c.id !== gHighlight && !DB.relations.some(r =>
-      (r.from === gHighlight && r.to === c.id) || (r.to === gHighlight && r.from === c.id));
-    const hit = gHighlight === c.id;
+    const dim = fset && !fset.has(c.id);
+    const sleep = !dim && dormantInfo(c.id).dormant;
+    const hit = gFocus === c.id;
     const short = c.name.length > 3 ? c.name.slice(0, 3) : c.name;
-    return `<g class="gnode ${dim ? "dim" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${c.pos.x},${c.pos.y})">
+    return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${pt.x},${pt.y})">
       <circle r="${R}" fill="${wc}" stroke="#ffffff"/>
       <text y="4.5" fill="${fgFor(wc)}">${esc(short)}</text>
       <text y="${R + 15}" fill="#5f5f5f" font-weight="400" font-size="11">${esc(c.name.length > 3 ? c.name : "")}</text>
@@ -929,6 +1111,7 @@ function renderGraph(){
   wrap.style.backgroundPosition = gview.tx + "px " + gview.ty + "px";
   const bs = 26 * gview.s;
   wrap.style.backgroundSize = bs + "px " + bs + "px";
+  updateFocusBar(fset ? gFocus : null);
 }
 
 function applyGraphTransformOnly(){
@@ -940,12 +1123,14 @@ function applyGraphTransformOnly(){
   wrap.style.backgroundSize = bs + "px " + bs + "px";
 }
 
-/* 手勢：單指拖背景=平移、單指拖節點=移動節點、雙指=縮放、輕點節點=詳情 */
+/* 手勢：單指拖背景=平移、單指拖節點=移動節點（網絡模式）、雙指=縮放、
+   輕點節點=聚焦、再點同一節點=開詳情 */
 (function(){
   const wrap = document.getElementById("graph-wrap");
   const pointers = new Map();
-  let mode = null;           // "pan" | "node" | "pinch"
-  let dragNode = null;       // customer object
+  let mode = null;
+  let dragNode = null;       // 網絡模式下被拖的節點
+  let downNode = null;       // 按下時壓到的節點（供輕點判斷）
   let startPt = null, moved = false;
   let pinchStart = null;
 
@@ -955,11 +1140,12 @@ function applyGraphTransformOnly(){
   }
 
   wrap.addEventListener("pointerdown", e => {
+    if (e.target.closest("#focus-bar")) return;
     wrap.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
     if (pointers.size === 2){
       mode = "pinch";
-      dragNode = null;
+      dragNode = null; downNode = null;
       const pts = [...pointers.values()];
       pinchStart = {
         d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
@@ -971,9 +1157,10 @@ function applyGraphTransformOnly(){
     const nodeEl = e.target.closest(".gnode");
     moved = false;
     startPt = {x:e.clientX, y:e.clientY, tx:gview.tx, ty:gview.ty};
-    if (nodeEl){
+    downNode = nodeEl ? getCustomer(nodeEl.dataset.nid) : null;
+    if (downNode && gMode === "net"){
       mode = "node";
-      dragNode = getCustomer(nodeEl.dataset.nid);
+      dragNode = downNode;
     } else {
       mode = "pan";
     }
@@ -988,7 +1175,6 @@ function applyGraphTransformOnly(){
       const mid = {x:(pts[0].x + pts[1].x)/2, y:(pts[0].y + pts[1].y)/2};
       const ns = Math.min(3, Math.max(0.15, pinchStart.s * d / (pinchStart.d || 1)));
       const r = wrap.getBoundingClientRect();
-      // 讓縮放圍繞雙指中點
       const wx = (pinchStart.mid.x - r.left - pinchStart.tx) / pinchStart.s;
       const wy = (pinchStart.mid.y - r.top - pinchStart.ty) / pinchStart.s;
       gview.s = ns;
@@ -1016,11 +1202,13 @@ function applyGraphTransformOnly(){
       if (pointers.size < 2){ mode = null; pinchStart = null; renderGraph(); }
       return;
     }
-    if (mode === "node" && dragNode){
-      if (moved){ save(); }
-      else openDetail(dragNode.id);
+    if (!moved && downNode){
+      if (gFocus === downNode.id) openDetail(downNode.id);
+      else { gFocus = downNode.id; gFocusDepth = 1; centerOn(downNode); renderGraph(); }
+    } else if (mode === "node" && dragNode && moved){
+      save();
     }
-    mode = null; dragNode = null; startPt = null;
+    mode = null; dragNode = null; downNode = null; startPt = null;
   }
   wrap.addEventListener("pointerup", up);
   wrap.addEventListener("pointercancel", up);
@@ -1028,18 +1216,14 @@ function applyGraphTransformOnly(){
 
 document.getElementById("graph-search").addEventListener("input", e => {
   const q = e.target.value.trim().toLowerCase();
-  if (!q){ gHighlight = null; renderGraph(); return; }
-  const hit = DB.customers.find(c => (c.name + " " + c.company).toLowerCase().includes(q));
-  gHighlight = hit ? hit.id : null;
-  if (hit){
-    const wrap = document.getElementById("graph-wrap");
-    gview.tx = wrap.clientWidth / 2 - hit.pos.x * gview.s;
-    gview.ty = wrap.clientHeight / 2 - hit.pos.y * gview.s;
-  }
-  renderGraph();
+  if (!q){ gFocus = null; gFocusDepth = 1; renderGraph(); return; }
+  const hit = visibleCustomers().find(c => (c.name + " " + c.company).toLowerCase().includes(q));
+  if (hit){ gFocus = hit.id; gFocusDepth = 1; renderGraph(); centerOn(hit); applyGraphTransformOnly(); }
+  else renderGraph();
 });
 document.getElementById("btn-relayout").addEventListener("click", () => {
   if (!DB.customers.length) return;
+  if (gMode === "intro"){ alert("轉介鏈視圖是自動排版，切回「網絡」才能整理版面。"); return; }
   if (!confirm("整理版面會重新自動排列所有節點，你手動拖過的位置會被重排。確定？")) return;
   DB.customers.forEach(c => c.pos = null);
   ensurePositions();
@@ -1118,6 +1302,13 @@ function renderSettings(){
       save(); renderSettings();
     });
   });
+  const dd = document.getElementById("dormant-days");
+  dd.value = dormantLimit();
+  dd.onchange = () => {
+    const v = parseInt(dd.value, 10);
+    DB.settings.dormantDays = (v >= 1 && v <= 365) ? v : 30;
+    save(); renderSettings();
+  };
 }
 document.getElementById("btn-add-reltype").addEventListener("click", () => {
   const label = document.getElementById("new-reltype").value.trim();
