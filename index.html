@@ -189,7 +189,7 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
 .gnode circle{stroke-width:2.5;}
-.gnode text{font-size:12px; font-weight:600; text-anchor:middle; pointer-events:none;}
+.gnode > text:not(.nlabel){font-size:12px; font-weight:600; text-anchor:middle; pointer-events:none;}
 .gnode.dim{opacity:.22;}
 .gedge.dim{opacity:.12;}
 input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radius:6px;}
@@ -201,6 +201,10 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
   align-items:center; gap:8px; flex-wrap:wrap;
   background:var(--card); border:1px solid var(--card-line); border-radius:12px;
   padding:10px 12px; box-shadow:0 4px 18px rgba(0,0,0,.10);
+}
+.nlabel{
+  fill:var(--ink); font-weight:600; text-anchor:middle; pointer-events:none;
+  paint-order:stroke; stroke:var(--paper); stroke-width:3.5px; stroke-linejoin:round;
 }
 .elabel{
   font-weight:600; text-anchor:middle; pointer-events:none;
@@ -222,9 +226,10 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
       <div id="backup-banner"></div>
       <input type="search" id="home-search" placeholder="搜尋姓名、公司、標籤、備註…" autocomplete="off">
       <div id="home-search-results"></div>
-      <div class="row" style="margin-top:14px;">
-        <button class="btn primary grow" id="btn-quick-log">記一筆互動</button>
-        <button class="btn grow" id="btn-quick-add">新增客戶</button>
+      <div class="row" style="margin-top:14px; gap:8px;">
+        <button class="btn primary grow" id="btn-quick-log" style="padding:10px 6px;">記互動</button>
+        <button class="btn grow" id="btn-quick-buy" style="padding:10px 6px;">記購買</button>
+        <button class="btn grow" id="btn-quick-add" style="padding:10px 6px;">新增客戶</button>
       </div>
       <div id="home-insights" style="margin-top:14px;"></div>
       <div id="home-dormant"></div>
@@ -393,7 +398,7 @@ function esc(s){
 
 /* ---------- 資料層 ---------- */
 function emptyDB(){
-  return {version:1, customers:[], relations:[], interactions:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), settings:{}, lastBackupAt:null};
+  return {version:1, customers:[], relations:[], interactions:[], purchases:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), settings:{}, lastBackupAt:null};
 }
 function migrate(d){
   const base = emptyDB();
@@ -401,6 +406,7 @@ function migrate(d){
   base.customers = d.customers || [];
   base.relations = d.relations || [];
   base.interactions = d.interactions || [];
+  base.purchases = d.purchases || [];
   base.settings = (d.settings && typeof d.settings === "object") ? d.settings : {};
   base.lastBackupAt = d.lastBackupAt || null;
   const types = Array.isArray(d.relationTypes) && d.relationTypes.length ? d.relationTypes : DEFAULT_RELTYPES;
@@ -431,6 +437,16 @@ function relType(key){ return DB.relationTypes.find(t => t.key === key) || {key,
 function relationsOf(id){ return DB.relations.filter(r => r.from === id || r.to === id); }
 function interactionsOf(id){
   return DB.interactions.filter(i => i.customerId === id).sort((a,b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+}
+function purchasesOf(id){
+  return DB.purchases.filter(x => x.customerId === id)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+}
+function spentOf(id){
+  return purchasesOf(id).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+}
+function money(n){
+  return "NT$ " + Math.round(n).toLocaleString("en-US");
 }
 function lastContact(id){
   const list = interactionsOf(id);
@@ -489,7 +505,9 @@ function searchCustomers(q){
 }
 function personRowHTML(c){
   const lc = lastContact(c.id);
-  const meta = [c.company, (c.tags||[]).map(t => "#" + t).join(" "), lc ? ("上次聯絡 " + lc) : "尚無互動紀錄"].filter(Boolean).join("・");
+  const sp = spentOf(c.id);
+  const meta = [c.company, sp ? "累計 " + money(sp) : "", (c.tags||[]).map(t => "#" + t).join(" "),
+    lc ? ("上次聯絡 " + lc) : "尚無互動紀錄"].filter(Boolean).join("・");
   return `<div class="person" data-open="${c.id}">
     <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
     <div class="info">
@@ -555,7 +573,15 @@ function renderHomeInsights(){
   const line = (label, html) =>
     `<div class="row" style="margin-bottom:6px; align-items:baseline;"><span class="muted" style="flex:0 0 6.5em;">${label}</span><span class="grow">${html}</span></div>`;
   const nameLink = c => `<span data-open="${c.id}" style="font-weight:600; cursor:pointer;">${esc(c.name)}</span>`;
+  const spender = DB.customers.map(c => ({c, v: spentOf(c.id)})).filter(x => x.v > 0)
+    .sort((a, b) => b.v - a.v)[0];
+  const lastBuy = DB.purchases.slice()
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)[0];
+  const noBuy = DB.customers.filter(c => c.warmth === "hot" && !purchasesOf(c.id).length);
   const rows = [
+    spender ? line("消費最高", nameLink(spender.c) + ` <span class="muted">累計 ${money(spender.v)}</span>`) : "",
+    lastBuy && getCustomer(lastBuy.customerId) ? line("最近成交", nameLink(getCustomer(lastBuy.customerId)) + ` <span class="muted">${esc(lastBuy.item)}・${esc(lastBuy.date)}</span>`) : "",
+    noBuy.length ? line("熟但沒成交", noBuy.slice(0, 3).map(nameLink).join("、") + (noBuy.length > 3 ? ` <span class="muted">…共 ${noBuy.length} 位</span>` : "")) : "",
     hub && relCount[hub.id] ? line("樞紐人物", nameLink(hub) + ` <span class="muted">${relCount[hub.id]} 條連結</span>`) : "",
     engine ? line("轉介發動機", nameLink(engine) + ` <span class="muted">介紹了 ${introOut[engine.id]} 人</span>`) : "",
     islands.length ? line("孤島客戶", islands.slice(0, 3).map(nameLink).join("、") + (islands.length > 3 ? ` <span class="muted">…共 ${islands.length} 位</span>` : "")) : "",
@@ -586,13 +612,14 @@ function renderHomeSearch(){
 document.getElementById("home-search").addEventListener("input", renderHomeSearch);
 document.getElementById("btn-quick-add").addEventListener("click", () => openEdit(null));
 document.getElementById("btn-quick-log").addEventListener("click", () => openQuickLog(null));
+document.getElementById("btn-quick-buy").addEventListener("click", () => openPurchase(null));
 
 /* ---------- 名單 ---------- */
 let listWarmth = "all";
 let listTag = "all";
 function renderList(){
   const wf = document.getElementById("list-warmth-filter");
-  const options = [["all","全部"],["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")]];
+  const options = [["all","全部"],["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")],["_buy","有成交"],["_nobuy","未成交"]];
   wf.innerHTML = options.map(([k,l]) =>
     `<button class="fbtn ${listWarmth===k?"on":""}" data-w="${k}">${l}</button>`).join("");
   wf.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { listWarmth = b.dataset.w; renderList(); }));
@@ -606,7 +633,9 @@ function renderList(){
   } else tf.innerHTML = "";
 
   let list = DB.customers.slice().sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"));
-  if (listWarmth !== "all") list = list.filter(c => c.warmth === listWarmth);
+  if (listWarmth === "_buy") list = list.filter(c => purchasesOf(c.id).length);
+  else if (listWarmth === "_nobuy") list = list.filter(c => !purchasesOf(c.id).length);
+  else if (listWarmth !== "all") list = list.filter(c => c.warmth === listWarmth);
   if (listTag !== "all") list = list.filter(c => (c.tags||[]).includes(listTag));
   const body = document.getElementById("list-body");
   body.innerHTML = list.length ? list.map(personRowHTML).join("")
@@ -634,6 +663,8 @@ function openDetail(id){
   if (!c) return;
   const rels = relationsOf(id);
   const logs = interactionsOf(id);
+  const buys = purchasesOf(id);
+  const spent = spentOf(id);
   const fields = [
     ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--brand-red)">${esc(c.phone)}</a>` : ""],
     ["公司／職業", esc(c.company)],
@@ -646,12 +677,24 @@ function openDetail(id){
       ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
     </div>
     ${fields.map(f => `<div style="margin-top:8px;"><span class="muted">${f[0]}</span>　${f[1]}</div>`).join("")}
+    ${c.preference ? `<div style="margin-top:10px;"><span class="muted">偏好／需求</span>
+      <div class="card" style="margin-top:4px; white-space:pre-wrap;">${esc(c.preference)}</div></div>` : ""}
     ${c.note ? `<div class="card" style="margin-top:12px; white-space:pre-wrap;">${esc(c.note)}</div>` : ""}
     <div class="row" style="margin-top:14px;">
-      <button class="btn primary grow" id="d-log">記一筆</button>
+      <button class="btn primary grow" id="d-log">記一筆互動</button>
+      <button class="btn grow" id="d-buy">記一筆購買</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
       <button class="btn grow" id="d-rel">加關係</button>
       <button class="btn grow" id="d-edit">編輯</button>
     </div>
+
+    <h2>購買紀錄（${buys.length}）${spent ? "　累計 " + money(spent) : ""}</h2>
+    <div>${buys.length ? buys.map(x =>
+      `<div class="ilog"><span class="when">${esc(x.date)}</span>
+       <button class="btn small ghost" data-delbuy="${x.id}" style="float:right;">刪</button>
+       <div class="txt"><b>${esc(x.item)}</b>${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${x.note ? "\n" + esc(x.note) : ""}</div></div>`).join("")
+      : `<div class="muted">還沒有購買紀錄。</div>`}</div>
 
     <h2>關係（${rels.length}）</h2>
     <div id="d-rels">${rels.length ? rels.map(r => {
@@ -676,17 +719,25 @@ function openDetail(id){
 
   document.getElementById("d-edit").addEventListener("click", () => openEdit(id));
   document.getElementById("d-log").addEventListener("click", () => openQuickLog(id));
+  document.getElementById("d-buy").addEventListener("click", () => openPurchase(id));
   document.getElementById("d-rel").addEventListener("click", () => openAddRelation(id));
   document.getElementById("d-delete").addEventListener("click", () => {
-    if (!confirm(`確定刪除「${c.name}」？相關的關係與互動紀錄會一併刪除，無法復原。`)) return;
+    if (!confirm(`確定刪除「${c.name}」？相關的關係、互動與購買紀錄會一併刪除，無法復原。`)) return;
     DB.customers = DB.customers.filter(x => x.id !== id);
     DB.relations = DB.relations.filter(r => r.from !== id && r.to !== id);
     DB.interactions = DB.interactions.filter(i => i.customerId !== id);
+    DB.purchases = DB.purchases.filter(x => x.customerId !== id);
     save(); closeSheet(); showView(currentView);
   });
   document.querySelectorAll("[data-delrel]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     DB.relations = DB.relations.filter(r => r.id !== b.dataset.delrel);
+    save(); openDetail(id);
+  }));
+  document.querySelectorAll("[data-delbuy]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    if (!confirm("刪除這筆購買紀錄？")) return;
+    DB.purchases = DB.purchases.filter(x => x.id !== b.dataset.delbuy);
     save(); openDetail(id);
   }));
   document.querySelectorAll("[data-dellog]").forEach(b => b.addEventListener("click", e => {
@@ -711,6 +762,7 @@ function openEdit(id){
       ${Object.keys(WARMTH).map(k =>
         `<button class="fbtn ${((c&&c.warmth)||"warm")===k?"on":""}" data-k="${k}">${esc(warmthLabel(k))}</button>`).join("")}
     </div>
+    <label>偏好／需求</label><textarea id="f-pref" rows="2" placeholder="例：只用無香精、預算 3 萬內、偏好週末見面">${esc(c ? (c.preference || "") : "")}</textarea>
     <label>備註</label><textarea id="f-note" rows="4">${esc(c ? c.note : "")}</textarea>
     <div class="row" style="margin-top:18px;">
       <button class="btn primary grow" id="f-save">儲存</button>
@@ -731,6 +783,7 @@ function openEdit(id){
       company: document.getElementById("f-company").value.trim(),
       source: document.getElementById("f-source").value.trim(),
       tags, warmth,
+      preference: document.getElementById("f-pref").value.trim(),
       note: document.getElementById("f-note").value.trim(),
       updatedAt: Date.now(),
     };
@@ -777,6 +830,35 @@ function openQuickLog(customerId){
     const text = document.getElementById("log-text").value.trim();
     if (!text){ alert("內容不能是空的。"); return; }
     DB.interactions.push({id:uid("i"), customerId:target, date:document.getElementById("log-date").value || todayStr(), text, createdAt:Date.now()});
+    save(); closeSheet();
+    if (c) openDetail(c.id); else showView(currentView);
+  });
+}
+
+/* ---------- 記一筆購買 ---------- */
+function openPurchase(customerId){
+  if (!DB.customers.length){ alert("還沒有任何客戶，先新增一位吧。"); return; }
+  const c = customerId ? getCustomer(customerId) : null;
+  openSheet("記一筆購買", `
+    ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("buy-pick", null)}
+    <label>日期</label><input type="date" id="buy-date" value="${todayStr()}">
+    <label>買了什麼（必填）</label><input type="text" id="buy-item" placeholder="例：儲蓄險三年期、保養組合">
+    <label>金額（選填）</label><input type="text" id="buy-amount" inputmode="decimal" placeholder="只填數字，例 36000">
+    <label>備註（選填）</label><textarea id="buy-note" rows="2" placeholder="例：分期付款、幫親戚一起買"></textarea>
+    <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="buy-save">儲存</button></div>
+  `);
+  if (!c) wireCustomerPicker("buy-pick", null);
+  document.getElementById("buy-save").addEventListener("click", () => {
+    const target = c ? c.id : (document.getElementById("buy-pick") || {}).value;
+    if (!target){ alert("請先選一位對象。"); return; }
+    const item = document.getElementById("buy-item").value.trim();
+    if (!item){ alert("請填買了什麼。"); return; }
+    const raw = document.getElementById("buy-amount").value.replace(/[,\s$]/g, "");
+    if (raw && isNaN(Number(raw))){ alert("金額請只填數字。"); return; }
+    DB.purchases.push({id:uid("p"), customerId:target,
+      date:document.getElementById("buy-date").value || todayStr(),
+      item, amount: raw ? Number(raw) : null,
+      note: document.getElementById("buy-note").value.trim(), createdAt:Date.now()});
     save(); closeSheet();
     if (c) openDetail(c.id); else showView(currentView);
   });
@@ -864,8 +946,8 @@ function forceLayout(movable){
       pos[c.id] = {x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang)};
     }
   });
-  // Fruchterman-Reingold：K = 理想邊長
-  const K = 150;
+  // Fruchterman-Reingold：K = 理想邊長（120 > 節點直徑 54，連線露得出來又不會太鬆）
+  const K = 120;
   for (let it = 0; it < 220; it++){
     const disp = {};
     all.forEach(c => disp[c.id] = {x:0, y:0});
@@ -889,8 +971,9 @@ function forceLayout(movable){
       disp[r.to].x += dx / d * f; disp[r.to].y += dy / d * f;
     });
     all.forEach(c => {
-      disp[c.id].x += (cx - pos[c.id].x) * 0.02;
-      disp[c.id].y += (cy - pos[c.id].y) * 0.02;
+      // 向心力 0.06：讓群集更聚攏，手機一屏能看到的節點更多（0.02 時整體攤太開）
+      disp[c.id].x += (cx - pos[c.id].x) * 0.06;
+      disp[c.id].y += (cy - pos[c.id].y) * 0.06;
     });
     const temp = 14 * (1 - it / 220) + 1;
     all.forEach(c => {
@@ -898,6 +981,23 @@ function forceLayout(movable){
       const d = Math.sqrt(disp[c.id].x**2 + disp[c.id].y**2) || 1;
       pos[c.id].x += disp[c.id].x / d * Math.min(d, temp);
       pos[c.id].y += disp[c.id].y / d * Math.min(d, temp);
+    });
+  }
+  // 沒有任何關係的節點不受引力拘束，會被斥力推到極遠；收斂後直接安置到群體外圍環上
+  const linked = new Set();
+  DB.relations.forEach(r => { linked.add(r.from); linked.add(r.to); });
+  const islands = all.filter(c => !linked.has(c.id) && !fixedSet.has(c.id));
+  if (islands.length && islands.length < all.length){
+    const core = all.filter(c => linked.has(c.id));
+    let mx = 0, my = 0;
+    core.forEach(c => { mx += pos[c.id].x; my += pos[c.id].y; });
+    mx /= core.length; my /= core.length;
+    let rad = 0;
+    core.forEach(c => rad = Math.max(rad, Math.hypot(pos[c.id].x - mx, pos[c.id].y - my)));
+    const ring = rad + 110;
+    islands.forEach((c, i) => {
+      const ang = (i / islands.length) * Math.PI * 2 + 0.6;
+      pos[c.id] = {x: mx + ring * Math.cos(ang), y: my + ring * Math.sin(ang)};
     });
   }
   all.forEach(c => { if (!fixedSet.has(c.id)) c.pos = {x:Math.round(pos[c.id].x), y:Math.round(pos[c.id].y)}; });
@@ -938,7 +1038,7 @@ function layoutIntroTree(vis, rels){
   ids.forEach(id => children[id] = []);
   ids.forEach(id => { const pa = parent[id]; if (pa !== undefined && idSet.has(pa)) children[pa].push(id); });
   const roots = ids.filter(id => parent[id] === undefined || !idSet.has(parent[id]));
-  const XS = 150, YS = 160;
+  const XS = 118, YS = 150;
   let cursor = 0;
   const pos = {};
   const seen = new Set();
@@ -968,9 +1068,21 @@ function fitViewTo(list){
   });
   const pad = 70;
   const sc = Math.min(1.4, Math.min(W / (maxX - minX + pad * 2 || 1), H / (maxY - minY + pad * 2 || 1)));
-  gview.s = Math.max(0.2, sc);
-  gview.tx = W / 2 - (minX + maxX) / 2 * gview.s;
-  gview.ty = H / 2 - (minY + maxY) / 2 * gview.s;
+  // 節點姓名採反向縮放（螢幕字級恆定），所以這裡可以真的 fit 全部節點
+  gview.s = Math.min(1.4, Math.max(0.22, sc));
+  let ax, ay;
+  if (sc >= 0.62){ ax = (minX + maxX) / 2; ay = (minY + maxY) / 2; }
+  else {
+    // 放不下全部時，對準「去極值後的實際中心」：中位數會偏向密集側造成單邊留白，
+    // 純 bbox 中心又會被離群點拉到空白區，取 10~90 百分位的中點兩者兼顧
+    const pick = (arr, q) => arr[Math.min(arr.length - 1, Math.max(0, Math.round((arr.length - 1) * q)))];
+    const xs = list.map(c => nodePos(c).x).sort((a, b) => a - b);
+    const ys = list.map(c => nodePos(c).y).sort((a, b) => a - b);
+    ax = (pick(xs, 0.1) + pick(xs, 0.9)) / 2;
+    ay = (pick(ys, 0.1) + pick(ys, 0.9)) / 2;
+  }
+  gview.tx = W / 2 - ax * gview.s;
+  gview.ty = H / 2 - ay * gview.s;
 }
 function centerOn(c){
   const wrap = document.getElementById("graph-wrap");
@@ -1099,11 +1211,11 @@ function renderGraph(){
     const dim = fset && !fset.has(c.id);
     const sleep = !dim && dormantInfo(c.id).dormant;
     const hit = gFocus === c.id;
-    const short = c.name.length > 3 ? c.name.slice(0, 3) : c.name;
+    // 姓名一律畫在圓下方（反向縮放，螢幕字級恆定），圓本身只當熟度色點，不再重複放字
+    const ns = Math.min(30, 12 / Math.max(gview.s, 0.2));
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${pt.x},${pt.y})">
       <circle r="${R}" fill="${wc}" stroke="#ffffff"/>
-      <text y="4.5" fill="${fgFor(wc)}">${esc(short)}</text>
-      <text y="${R + 15}" fill="#5f5f5f" font-weight="400" font-size="11">${esc(c.name.length > 3 ? c.name : "")}</text>
+      <text class="nlabel" y="${R + ns * 0.95}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
     </g>`;
   }).join("");
 
@@ -1238,7 +1350,8 @@ function renderSettings(){
     ? "上次備份：" + new Date(DB.lastBackupAt).toLocaleString("zh-TW", {hour12:false})
     : "<b style='color:var(--danger)'>還沒有備份過</b>";
   document.getElementById("stats-body").textContent =
-    `${DB.customers.length} 位客戶、${DB.relations.length} 條關係、${DB.interactions.length} 筆互動紀錄`;
+    `${DB.customers.length} 位客戶、${DB.relations.length} 條關係、${DB.interactions.length} 筆互動紀錄、`
+    + `${DB.purchases.length} 筆購買（累計 ${money(DB.purchases.reduce((t, x) => t + (Number(x.amount) || 0), 0))}）`;
 
   const rl = document.getElementById("reltype-list");
   rl.innerHTML = DB.relationTypes.map(t => {
