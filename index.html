@@ -724,30 +724,31 @@ function forceLayout(movable){
       pos[c.id] = {x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang)};
     }
   });
-  const K = 130;
+  // Fruchterman-Reingold：K = 理想邊長（節點直徑 54 的近 3 倍，確保圓不重疊、線段夠長）
+  const K = 150;
   for (let it = 0; it < 220; it++){
     const disp = {};
     all.forEach(c => disp[c.id] = {x:0, y:0});
-    // 斥力
+    // 斥力（K^2 / d）
     for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++){
       const a = all[i], b = all[j];
       let dx = pos[a.id].x - pos[b.id].x, dy = pos[a.id].y - pos[b.id].y;
       let d2 = dx*dx + dy*dy;
       if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
-      const f = K * K / d2;
       const d = Math.sqrt(d2);
+      const f = K * K / d;
       disp[a.id].x += dx / d * f; disp[a.id].y += dy / d * f;
       disp[b.id].x -= dx / d * f; disp[b.id].y -= dy / d * f;
     }
-    // 引力（沿關係線）
+    // 引力（沿關係線，d^2 / K；與斥力的平衡距離即為 K）
     DB.relations.forEach(r => {
       const pa = pos[r.from], pb = pos[r.to];
       if (!pa || !pb) return;
       const dx = pa.x - pb.x, dy = pa.y - pb.y;
       const d = Math.max(1, Math.sqrt(dx*dx + dy*dy));
-      const f = (d * d) / (K * 90);
-      disp[r.from].x -= dx / d * f * 60; disp[r.from].y -= dy / d * f * 60;
-      disp[r.to].x += dx / d * f * 60; disp[r.to].y += dy / d * f * 60;
+      const f = (d * d) / K;
+      disp[r.from].x -= dx / d * f; disp[r.from].y -= dy / d * f;
+      disp[r.to].x += dx / d * f; disp[r.to].y += dy / d * f;
     });
     // 向質心微聚
     all.forEach(c => {
