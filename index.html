@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>人脈圖</title>
+<meta name="theme-color" content="#faf6f0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="人脈圖">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  --paper:#faf6f0; --card:#ffffff; --ink:#3a3128; --ink-soft:#6f6457;
+  --line:#e7ddd0; --accent:#c2571a; --accent-soft:#f4e3d5;
+  --hot:#c2571a; --warm:#d99a2b; --cold:#7d8b99;
+  --hot-bg:#f7e2d3; --warm-bg:#f8ecd2; --cold-bg:#e5eaef;
+  --danger:#b3372f; --danger-bg:#f6e0de;
+  --nav-h:58px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0; height:100%;}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"PingFang TC","Microsoft JhengHei UI","Noto Sans CJK TC",system-ui,sans-serif;
+  font-size:16px; line-height:1.55;
+  overscroll-behavior:none;
+}
+button{font-family:inherit;}
+input,textarea,select{
+  font-family:inherit; font-size:16px; color:var(--ink);
+  background:#fff; border:1px solid var(--line); border-radius:10px;
+  padding:10px 12px; width:100%;
+}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent); outline-offset:0; border-color:var(--accent);}
+label{display:block; font-size:13px; color:var(--ink-soft); margin:14px 0 4px;}
+
+/* ===== 版面骨架 ===== */
+#app{height:100%; display:flex; flex-direction:column;}
+header{
+  padding:calc(env(safe-area-inset-top) + 12px) 16px 10px;
+  display:flex; align-items:baseline; gap:10px;
+  border-bottom:1px solid var(--line); background:var(--paper);
+  flex:0 0 auto;
+}
+header h1{font-size:20px; margin:0; letter-spacing:1px;}
+header .sub{font-size:12px; color:var(--ink-soft);}
+main{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);}
+.view{display:none; padding:16px;}
+.view.active{display:block;}
+#view-graph{padding:0; height:100%;}
+#view-graph.active{display:flex; flex-direction:column;}
+
+nav#tabbar{
+  position:fixed; left:0; right:0; bottom:0;
+  height:calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  background:#fffdf9; border-top:1px solid var(--line);
+  display:flex; z-index:50;
+}
+nav#tabbar button{
+  flex:1; border:0; background:none; color:var(--ink-soft);
+  font-size:13px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+}
+nav#tabbar button.on{color:var(--accent); font-weight:600;}
+nav#tabbar svg{width:22px; height:22px;}
+
+/* ===== 通用元件 ===== */
+.card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px;}
+.btn{
+  display:inline-block; border:1px solid var(--line); background:#fff; color:var(--ink);
+  border-radius:10px; padding:10px 16px; font-size:15px; cursor:pointer;
+}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+.btn.danger{background:var(--danger); border-color:var(--danger); color:#fff;}
+.btn.ghost{border-color:transparent; color:var(--accent);}
+.btn.small{padding:5px 10px; font-size:13px; border-radius:8px;}
+.btn:active{opacity:.75;}
+.row{display:flex; gap:10px; align-items:center;}
+.row .grow{flex:1;}
+.chip{
+  display:inline-block; font-size:12px; padding:2px 9px; border-radius:99px;
+  background:var(--accent-soft); color:var(--accent); margin:0 4px 4px 0;
+}
+.chip.tag{background:#efe9df; color:var(--ink-soft);}
+.warmth-hot{background:var(--hot-bg); color:var(--hot);}
+.warmth-warm{background:var(--warm-bg); color:#9a6b12;}
+.warmth-cold{background:var(--cold-bg); color:#54626f;}
+.muted{color:var(--ink-soft); font-size:13px;}
+.empty{
+  text-align:center; color:var(--ink-soft); padding:36px 20px; font-size:14px;
+  border:1px dashed var(--line); border-radius:14px; background:#fffdf9;
+}
+h2{font-size:15px; color:var(--ink-soft); font-weight:600; margin:20px 0 8px; letter-spacing:.5px;}
+.banner{
+  background:var(--danger-bg); color:var(--danger);
+  border:1px solid #e6c3c0; border-radius:12px;
+  padding:10px 14px; margin-bottom:14px; font-size:14px;
+  display:flex; align-items:center; gap:10px;
+}
+.banner .btn{flex:0 0 auto;}
+
+/* 客戶列表項 */
+.person{
+  display:flex; align-items:center; gap:12px;
+  background:var(--card); border:1px solid var(--line); border-radius:12px;
+  padding:10px 12px; margin-bottom:8px; cursor:pointer;
+}
+.person .dot{
+  flex:0 0 auto; width:40px; height:40px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:600; color:#fff;
+}
+.dot-hot{background:var(--hot);} .dot-warm{background:var(--warm);} .dot-cold{background:var(--cold);}
+.person .info{flex:1; min-width:0;}
+.person .name{font-weight:600;}
+.person .meta{font-size:12px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+/* 互動紀錄項 */
+.ilog{border-left:3px solid var(--accent-soft); padding:4px 0 4px 10px; margin-bottom:10px;}
+.ilog .when{font-size:12px; color:var(--ink-soft);}
+.ilog .who{font-weight:600; font-size:14px; color:var(--accent);}
+.ilog .txt{font-size:14px; white-space:pre-wrap;}
+
+/* 篩選列 */
+.filterbar{display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; -webkit-overflow-scrolling:touch;}
+.filterbar .fbtn{
+  flex:0 0 auto; border:1px solid var(--line); background:#fff; border-radius:99px;
+  padding:5px 13px; font-size:13px; color:var(--ink-soft); cursor:pointer;
+}
+.filterbar .fbtn.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+/* ===== 底部彈窗 sheet ===== */
+#sheet-mask{
+  position:fixed; inset:0; background:rgba(50,40,30,.45); z-index:80;
+  display:none;
+}
+#sheet-mask.show{display:block;}
+#sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:90;
+  background:var(--paper); border-radius:18px 18px 0 0;
+  max-height:88%; display:none; flex-direction:column;
+  box-shadow:0 -6px 30px rgba(0,0,0,.18);
+}
+#sheet.show{display:flex;}
+#sheet .sheet-head{
+  padding:14px 16px 8px; display:flex; align-items:center; gap:8px;
+  border-bottom:1px solid var(--line); flex:0 0 auto;
+}
+#sheet .sheet-head .title{font-size:17px; font-weight:700; flex:1;}
+#sheet .sheet-body{overflow-y:auto; padding:14px 16px calc(24px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling:touch;}
+
+/* ===== 關係圖 ===== */
+#graph-tools{
+  padding:10px 12px 6px; display:flex; gap:8px; align-items:center; flex:0 0 auto;
+}
+#graph-tools input{flex:1; padding:8px 12px;}
+#graph-legend{
+  display:flex; gap:12px; overflow-x:auto; padding:4px 12px 8px; flex:0 0 auto;
+  font-size:12px; color:var(--ink-soft); -webkit-overflow-scrolling:touch;
+}
+#graph-legend .lg{flex:0 0 auto; display:flex; align-items:center; gap:5px; white-space:nowrap;}
+#graph-legend .sw{width:16px; height:3px; border-radius:2px;}
+#graph-legend .swdot{width:11px; height:11px; border-radius:50%;}
+#graph-wrap{flex:1 1 auto; position:relative; overflow:hidden; touch-action:none; background:
+  radial-gradient(#eee4d6 1px, transparent 1px); background-size:26px 26px;}
+#graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
+.gnode{cursor:pointer;}
+.gnode circle{stroke-width:2.5;}
+.gnode text{font-size:12px; font-weight:600; fill:#fff; text-anchor:middle; pointer-events:none;}
+.gnode.dim{opacity:.22;}
+.gedge.dim{opacity:.12;}
+.gnode.hit circle{stroke:#3a3128; stroke-width:4;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>人脈圖</h1>
+    <span class="sub" id="head-stats"></span>
+  </header>
+  <main id="main">
+
+    <!-- 首頁 -->
+    <section class="view active" id="view-home">
+      <div id="backup-banner"></div>
+      <input type="search" id="home-search" placeholder="搜尋姓名、公司、標籤、備註…" autocomplete="off">
+      <div id="home-search-results"></div>
+      <div class="row" style="margin-top:14px;">
+        <button class="btn primary grow" id="btn-quick-log">記一筆互動</button>
+        <button class="btn grow" id="btn-quick-add">新增客戶</button>
+      </div>
+      <h2>最近互動</h2>
+      <div id="home-recent"></div>
+    </section>
+
+    <!-- 名單 -->
+    <section class="view" id="view-list">
+      <div class="filterbar" id="list-warmth-filter"></div>
+      <div class="filterbar" id="list-tag-filter"></div>
+      <div id="list-body"></div>
+      <button class="btn primary" style="width:100%; margin-top:6px;" id="btn-list-add">新增客戶</button>
+    </section>
+
+    <!-- 關係圖 -->
+    <section class="view" id="view-graph">
+      <div id="graph-tools">
+        <input type="search" id="graph-search" placeholder="找人並定位…" autocomplete="off">
+        <button class="btn small" id="btn-relayout">整理版面</button>
+      </div>
+      <div id="graph-legend"></div>
+      <div id="graph-wrap"><svg id="graph-svg"></svg></div>
+    </section>
+
+    <!-- 設定 -->
+    <section class="view" id="view-settings">
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:6px;">備份</div>
+        <div class="muted" id="backup-status"></div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn primary grow" id="btn-export">備份（匯出 JSON）</button>
+          <button class="btn grow" id="btn-import">匯入備份</button>
+        </div>
+        <input type="file" id="import-file" accept=".json,application/json" style="display:none;">
+        <div class="muted" style="margin-top:10px;">備份會產生一個 JSON 檔，請在分享面板選「儲存到檔案」→ iCloud Drive。匯入會以備份內容<b>整份取代</b>目前資料。</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:6px;">資料統計</div>
+        <div class="muted" id="stats-body"></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:6px;">關係種類</div>
+        <div id="reltype-list"></div>
+        <div class="row" style="margin-top:10px;">
+          <input type="text" id="new-reltype" placeholder="新種類名稱（例：同學）" class="grow">
+          <button class="btn small" id="btn-add-reltype">新增</button>
+        </div>
+        <label class="row" style="margin-top:8px; font-size:13px; color:var(--ink-soft);">
+          <input type="checkbox" id="new-reltype-directed" style="width:auto;"> 這種關係有方向（像「介紹人」）
+        </label>
+      </div>
+      <div class="card muted">
+        人脈圖 v1.0 — 資料只存在這台裝置的瀏覽器裡，不會上傳。<br>
+        請固定用同一個入口開啟（加到主畫面後就都用主畫面圖示），並養成每週備份的習慣。
+      </div>
+    </section>
+  </main>
+
+  <nav id="tabbar">
+    <button data-view="home" class="on">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+      首頁</button>
+    <button data-view="list">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.3 3.4-5 6.5-5s5.7 1.7 6.5 5"/><circle cx="17.5" cy="9.5" r="2.5"/><path d="M16 15.2c2.6.2 4.7 1.6 5.5 4.3"/></svg>
+      名單</button>
+    <button data-view="graph">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.8"/><circle cx="18" cy="8" r="2.8"/><circle cx="12" cy="18" r="2.8"/><path d="M8.5 7l6.7.8M7.2 8.5l3.6 7M16.7 10.5l-3.4 5.2"/></svg>
+      關係圖</button>
+    <button data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+      設定</button>
+  </nav>
+</div>
+
+<div id="sheet-mask"></div>
+<div id="sheet">
+  <div class="sheet-head">
+    <div class="title" id="sheet-title"></div>
+    <button class="btn small" id="sheet-close">關閉</button>
+  </div>
+  <div class="sheet-body" id="sheet-body"></div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+   人脈圖 — 個人客戶關係心智圖（單檔、本機儲存、不上傳）
+   ========================================================= */
+
+const KEY = "renmai_data_v1";
+const WARMTH = {
+  hot:  {label:"鐵桿", color:"var(--hot)",  raw:"#c2571a"},
+  warm: {label:"溫",   color:"var(--warm)", raw:"#d99a2b"},
+  cold: {label:"冷",   color:"var(--cold)", raw:"#7d8b99"},
+};
+const DEFAULT_RELTYPES = [
+  {key:"intro",     label:"介紹人", directed:true,  color:"#c2571a", builtin:true},
+  {key:"family",    label:"家人",   directed:false, color:"#8a4f9e", builtin:true},
+  {key:"friend",    label:"朋友",   directed:false, color:"#2e7d32", builtin:true},
+  {key:"colleague", label:"同事",   directed:false, color:"#1565c0", builtin:true},
+  {key:"club",      label:"同社團", directed:false, color:"#00838f", builtin:true},
+];
+const CUSTOM_COLORS = ["#ad1457","#5d4037","#37474f","#7b8a1e","#4527a0","#bf6b00"];
+
+let DB = null;
+
+function uid(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ---------- 資料層 ---------- */
+function emptyDB(){
+  return {version:1, customers:[], relations:[], interactions:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), lastBackupAt:null};
+}
+function migrate(d){
+  const base = emptyDB();
+  if (!d || typeof d !== "object" || !Array.isArray(d.customers)) throw new Error("格式不正確");
+  base.customers = d.customers || [];
+  base.relations = d.relations || [];
+  base.interactions = d.interactions || [];
+  base.lastBackupAt = d.lastBackupAt || null;
+  const types = Array.isArray(d.relationTypes) && d.relationTypes.length ? d.relationTypes : DEFAULT_RELTYPES;
+  // 確保內建五種一定在
+  const have = new Set(types.map(t => t.key));
+  DEFAULT_RELTYPES.forEach(t => { if (!have.has(t.key)) types.push(JSON.parse(JSON.stringify(t))); });
+  base.relationTypes = types;
+  return base;
+}
+function loadDB(){
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch(e){}
+  if (!raw) return emptyDB();
+  try { return migrate(JSON.parse(raw)); }
+  catch(e){
+    try { localStorage.setItem(KEY + "_corrupt_" + Date.now(), raw); } catch(_){}
+    alert("讀取資料時發現格式異常，已把原始內容另存一份在瀏覽器裡。畫面將以空白資料開始，請盡快匯入最近的備份。");
+    return emptyDB();
+  }
+}
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(DB)); }
+  catch(e){ alert("儲存失敗：" + e.message); }
+  renderHeadStats();
+}
+function getCustomer(id){ return DB.customers.find(c => c.id === id) || null; }
+function relType(key){ return DB.relationTypes.find(t => t.key === key) || {key, label:key, directed:false, color:"#999"}; }
+function relationsOf(id){ return DB.relations.filter(r => r.from === id || r.to === id); }
+function interactionsOf(id){
+  return DB.interactions.filter(i => i.customerId === id).sort((a,b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+}
+function lastContact(id){
+  const list = interactionsOf(id);
+  return list.length ? list[0].date : null;
+}
+
+/* ---------- 導覽 ---------- */
+const views = ["home","list","graph","settings"];
+let currentView = "home";
+function showView(name){
+  currentView = name;
+  views.forEach(v => {
+    document.getElementById("view-" + v).classList.toggle("active", v === name);
+  });
+  document.querySelectorAll("#tabbar button").forEach(b => b.classList.toggle("on", b.dataset.view === name));
+  if (name === "home") renderHome();
+  if (name === "list") renderList();
+  if (name === "graph") renderGraph();
+  if (name === "settings") renderSettings();
+  document.getElementById("main").scrollTop = 0;
+}
+document.querySelectorAll("#tabbar button").forEach(b => {
+  b.addEventListener("click", () => showView(b.dataset.view));
+});
+
+function renderHeadStats(){
+  document.getElementById("head-stats").textContent =
+    DB.customers.length ? (DB.customers.length + " 位客戶") : "";
+}
+
+/* ---------- Sheet（底部彈窗） ---------- */
+const sheetEl = document.getElementById("sheet");
+const maskEl = document.getElementById("sheet-mask");
+function openSheet(title, bodyHTML){
+  document.getElementById("sheet-title").textContent = title;
+  document.getElementById("sheet-body").innerHTML = bodyHTML;
+  sheetEl.classList.add("show");
+  maskEl.classList.add("show");
+}
+function closeSheet(){
+  sheetEl.classList.remove("show");
+  maskEl.classList.remove("show");
+  document.getElementById("sheet-body").innerHTML = "";
+}
+document.getElementById("sheet-close").addEventListener("click", closeSheet);
+maskEl.addEventListener("click", closeSheet);
+
+/* ---------- 共用：客戶搜尋 ---------- */
+function searchCustomers(q){
+  q = q.trim().toLowerCase();
+  if (!q) return [];
+  return DB.customers.filter(c => {
+    const hay = [c.name, c.phone, c.company, c.source, c.note, (c.tags||[]).join(" ")].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+}
+function personRowHTML(c){
+  const w = WARMTH[c.warmth] || WARMTH.warm;
+  const lc = lastContact(c.id);
+  const meta = [c.company, (c.tags||[]).map(t => "#" + t).join(" "), lc ? ("上次聯絡 " + lc) : "尚無互動紀錄"].filter(Boolean).join("・");
+  return `<div class="person" data-open="${c.id}">
+    <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
+    <div class="info">
+      <div class="name">${esc(c.name)} <span class="chip warmth-${c.warmth}">${w.label}</span></div>
+      <div class="meta">${esc(meta)}</div>
+    </div>
+  </div>`;
+}
+// 事件委派：任何 data-open 都打開詳情
+document.body.addEventListener("click", e => {
+  const t = e.target.closest("[data-open]");
+  if (t) openDetail(t.dataset.open);
+});
+
+/* ---------- 首頁 ---------- */
+function backupOverdue(){
+  if (!DB.customers.length) return false;
+  if (!DB.lastBackupAt) return true;
+  return (Date.now() - new Date(DB.lastBackupAt).getTime()) > 7 * 86400 * 1000;
+}
+function renderHome(){
+  const bn = document.getElementById("backup-banner");
+  if (backupOverdue()){
+    bn.innerHTML = `<div class="banner"><span class="grow">已超過 7 天沒有備份，資料只存在這支手機裡。</span>
+      <button class="btn small danger" id="banner-go">去備份</button></div>`;
+    document.getElementById("banner-go").addEventListener("click", () => showView("settings"));
+  } else bn.innerHTML = "";
+
+  const recent = DB.interactions.slice().sort((a,b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 10);
+  const rb = document.getElementById("home-recent");
+  if (!recent.length){
+    rb.innerHTML = `<div class="empty">還沒有互動紀錄。<br>跟客戶聊完，按「記一筆互動」隨手記下來。</div>`;
+  } else {
+    rb.innerHTML = recent.map(i => {
+      const c = getCustomer(i.customerId);
+      return `<div class="ilog" data-open="${i.customerId}">
+        <span class="who">${esc(c ? c.name : "（已刪除）")}</span> <span class="when">${esc(i.date)}</span>
+        <div class="txt">${esc(i.text)}</div></div>`;
+    }).join("");
+  }
+  renderHomeSearch();
+}
+function renderHomeSearch(){
+  const q = document.getElementById("home-search").value;
+  const box = document.getElementById("home-search-results");
+  if (!q.trim()){ box.innerHTML = ""; return; }
+  const hits = searchCustomers(q);
+  box.innerHTML = hits.length
+    ? `<div style="margin-top:10px;">${hits.map(personRowHTML).join("")}</div>`
+    : `<div class="muted" style="margin-top:10px;">找不到「${esc(q)}」</div>`;
+}
+document.getElementById("home-search").addEventListener("input", renderHomeSearch);
+document.getElementById("btn-quick-add").addEventListener("click", () => openEdit(null));
+document.getElementById("btn-quick-log").addEventListener("click", () => openQuickLog(null));
+
+/* ---------- 名單 ---------- */
+let listWarmth = "all";
+let listTag = "all";
+function renderList(){
+  const wf = document.getElementById("list-warmth-filter");
+  const options = [["all","全部"],["hot","鐵桿"],["warm","溫"],["cold","冷"]];
+  wf.innerHTML = options.map(([k,l]) =>
+    `<button class="fbtn ${listWarmth===k?"on":""}" data-w="${k}">${l}</button>`).join("");
+  wf.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { listWarmth = b.dataset.w; renderList(); }));
+
+  const tags = [...new Set(DB.customers.flatMap(c => c.tags || []))].sort();
+  const tf = document.getElementById("list-tag-filter");
+  if (tags.length){
+    tf.innerHTML = [`<button class="fbtn ${listTag==="all"?"on":""}" data-t="all">全部標籤</button>`]
+      .concat(tags.map(t => `<button class="fbtn ${listTag===t?"on":""}" data-t="${esc(t)}">#${esc(t)}</button>`)).join("");
+    tf.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { listTag = b.dataset.t; renderList(); }));
+  } else tf.innerHTML = "";
+
+  let list = DB.customers.slice().sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"));
+  if (listWarmth !== "all") list = list.filter(c => c.warmth === listWarmth);
+  if (listTag !== "all") list = list.filter(c => (c.tags||[]).includes(listTag));
+  const body = document.getElementById("list-body");
+  body.innerHTML = list.length ? list.map(personRowHTML).join("")
+    : `<div class="empty">${DB.customers.length ? "沒有符合篩選的客戶。" : "還沒有客戶，按下面的按鈕建立第一位。"}</div>`;
+}
+document.getElementById("btn-list-add").addEventListener("click", () => openEdit(null));
+
+/* ---------- 客戶詳情 ---------- */
+function relationLabel(r, viewpointId){
+  const t = relType(r.type);
+  const otherId = r.from === viewpointId ? r.to : r.from;
+  const other = getCustomer(otherId);
+  const otherName = other ? other.name : "（已刪除）";
+  let text;
+  if (t.directed){
+    text = r.from === viewpointId ? `介紹了 ${otherName}` : `${otherName} 介紹（引路人）`;
+    if (t.key !== "intro") text = r.from === viewpointId ? `${t.label} → ${otherName}` : `${otherName} → ${t.label}`;
+  } else {
+    text = `${t.label}：${otherName}`;
+  }
+  return {text, otherId, color:t.color};
+}
+function openDetail(id){
+  const c = getCustomer(id);
+  if (!c) return;
+  const w = WARMTH[c.warmth] || WARMTH.warm;
+  const rels = relationsOf(id);
+  const logs = interactionsOf(id);
+  const fields = [
+    ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--accent)">${esc(c.phone)}</a>` : ""],
+    ["公司／職業", esc(c.company)],
+    ["怎麼認識的", esc(c.source)],
+  ].filter(f => f[1]);
+
+  openSheet(c.name, `
+    <div>
+      <span class="chip warmth-${c.warmth}">${w.label}</span>
+      ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
+    </div>
+    ${fields.map(f => `<div style="margin-top:8px;"><span class="muted">${f[0]}</span>　${f[1]}</div>`).join("")}
+    ${c.note ? `<div class="card" style="margin-top:12px; white-space:pre-wrap;">${esc(c.note)}</div>` : ""}
+    <div class="row" style="margin-top:14px;">
+      <button class="btn primary grow" id="d-log">記一筆</button>
+      <button class="btn grow" id="d-rel">加關係</button>
+      <button class="btn grow" id="d-edit">編輯</button>
+    </div>
+
+    <h2>關係（${rels.length}）</h2>
+    <div id="d-rels">${rels.length ? rels.map(r => {
+      const L = relationLabel(r, id);
+      return `<div class="row" style="margin-bottom:6px;">
+        <span class="grow" data-open="${L.otherId}" style="cursor:pointer;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${L.color};margin-right:6px;"></span>${esc(L.text)}</span>
+        <button class="btn small" data-delrel="${r.id}">刪</button></div>`;
+    }).join("") : `<div class="muted">還沒有連任何人。</div>`}</div>
+
+    <h2>互動紀錄（${logs.length}）</h2>
+    <div>${logs.length ? logs.map(i =>
+      `<div class="ilog"><span class="when">${esc(i.date)}</span>
+       <button class="btn small ghost" data-dellog="${i.id}" style="float:right;">刪</button>
+       <div class="txt">${esc(i.text)}</div></div>`).join("")
+      : `<div class="muted">還沒有互動紀錄。</div>`}</div>
+
+    <div style="margin-top:22px; text-align:center;">
+      <button class="btn ghost" id="d-delete" style="color:var(--danger);">刪除這位客戶</button>
+    </div>
+  `);
+
+  document.getElementById("d-edit").addEventListener("click", () => openEdit(id));
+  document.getElementById("d-log").addEventListener("click", () => openQuickLog(id));
+  document.getElementById("d-rel").addEventListener("click", () => openAddRelation(id));
+  document.getElementById("d-delete").addEventListener("click", () => {
+    if (!confirm(`確定刪除「${c.name}」？相關的關係與互動紀錄會一併刪除，無法復原。`)) return;
+    DB.customers = DB.customers.filter(x => x.id !== id);
+    DB.relations = DB.relations.filter(r => r.from !== id && r.to !== id);
+    DB.interactions = DB.interactions.filter(i => i.customerId !== id);
+    save(); closeSheet(); showView(currentView);
+  });
+  document.querySelectorAll("[data-delrel]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    DB.relations = DB.relations.filter(r => r.id !== b.dataset.delrel);
+    save(); openDetail(id);
+  }));
+  document.querySelectorAll("[data-dellog]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    if (!confirm("刪除這筆互動紀錄？")) return;
+    DB.interactions = DB.interactions.filter(i => i.id !== b.dataset.dellog);
+    save(); openDetail(id);
+  }));
+}
+
+/* ---------- 新增／編輯客戶 ---------- */
+function openEdit(id){
+  const c = id ? getCustomer(id) : null;
+  openSheet(c ? "編輯：" + c.name : "新增客戶", `
+    <label>姓名（必填）</label><input type="text" id="f-name" value="${esc(c ? c.name : "")}">
+    <label>電話</label><input type="tel" id="f-phone" value="${esc(c ? c.phone : "")}">
+    <label>公司／職業</label><input type="text" id="f-company" value="${esc(c ? c.company : "")}">
+    <label>怎麼認識的</label><input type="text" id="f-source" value="${esc(c ? c.source : "")}" placeholder="例：老王介紹、社團活動…">
+    <label>標籤（用逗號分隔）</label><input type="text" id="f-tags" value="${esc(c ? (c.tags||[]).join("、") : "")}" placeholder="例：保險、高潛力、台中">
+    <label>熟度</label>
+    <div class="filterbar" id="f-warmth">
+      ${Object.entries(WARMTH).map(([k,v]) =>
+        `<button class="fbtn ${((c&&c.warmth)||"warm")===k?"on":""}" data-k="${k}">${v.label}</button>`).join("")}
+    </div>
+    <label>備註</label><textarea id="f-note" rows="4">${esc(c ? c.note : "")}</textarea>
+    <div class="row" style="margin-top:18px;">
+      <button class="btn primary grow" id="f-save">儲存</button>
+    </div>
+  `);
+  let warmth = (c && c.warmth) || "warm";
+  document.querySelectorAll("#f-warmth .fbtn").forEach(b => b.addEventListener("click", () => {
+    warmth = b.dataset.k;
+    document.querySelectorAll("#f-warmth .fbtn").forEach(x => x.classList.toggle("on", x === b));
+  }));
+  document.getElementById("f-save").addEventListener("click", () => {
+    const name = document.getElementById("f-name").value.trim();
+    if (!name){ alert("姓名是必填的。"); return; }
+    const tags = document.getElementById("f-tags").value.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+    const data = {
+      name,
+      phone: document.getElementById("f-phone").value.trim(),
+      company: document.getElementById("f-company").value.trim(),
+      source: document.getElementById("f-source").value.trim(),
+      tags, warmth,
+      note: document.getElementById("f-note").value.trim(),
+      updatedAt: Date.now(),
+    };
+    if (c) Object.assign(c, data);
+    else DB.customers.push(Object.assign({id:uid("c"), pos:null, createdAt:Date.now()}, data));
+    save(); closeSheet(); showView(currentView);
+    if (c) openDetail(c.id);
+  });
+}
+
+/* ---------- 記一筆互動 ---------- */
+function customerPickerHTML(pickId, excludeId){
+  const list = DB.customers.slice().sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"))
+    .filter(c => c.id !== excludeId);
+  return `<input type="search" id="${pickId}-q" placeholder="輸入姓名過濾…" autocomplete="off" style="margin-bottom:8px;">
+    <select id="${pickId}" size="5" style="height:auto;">
+      ${list.map(c => `<option value="${c.id}">${esc(c.name)}${c.company ? "（" + esc(c.company) + "）" : ""}</option>`).join("")}
+    </select>`;
+}
+function wireCustomerPicker(pickId, excludeId){
+  const q = document.getElementById(pickId + "-q");
+  const sel = document.getElementById(pickId);
+  q.addEventListener("input", () => {
+    const kw = q.value.trim().toLowerCase();
+    const list = DB.customers.slice().sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"))
+      .filter(c => c.id !== excludeId)
+      .filter(c => !kw || (c.name + " " + c.company).toLowerCase().includes(kw));
+    sel.innerHTML = list.map(c => `<option value="${c.id}">${esc(c.name)}${c.company ? "（" + esc(c.company) + "）" : ""}</option>`).join("");
+  });
+}
+function openQuickLog(customerId){
+  if (!DB.customers.length){ alert("還沒有任何客戶，先新增一位吧。"); return; }
+  const c = customerId ? getCustomer(customerId) : null;
+  openSheet("記一筆互動", `
+    ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("log-pick", null)}
+    <label>日期</label><input type="date" id="log-date" value="${todayStr()}">
+    <label>聊了什麼</label><textarea id="log-text" rows="4" placeholder="重點記兩句就好…"></textarea>
+    <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="log-save">儲存</button></div>
+  `);
+  if (!c) wireCustomerPicker("log-pick", null);
+  document.getElementById("log-save").addEventListener("click", () => {
+    const target = c ? c.id : (document.getElementById("log-pick") || {}).value;
+    if (!target){ alert("請先選一位對象。"); return; }
+    const text = document.getElementById("log-text").value.trim();
+    if (!text){ alert("內容不能是空的。"); return; }
+    DB.interactions.push({id:uid("i"), customerId:target, date:document.getElementById("log-date").value || todayStr(), text, createdAt:Date.now()});
+    save(); closeSheet();
+    if (c) openDetail(c.id); else showView(currentView);
+  });
+}
+
+/* ---------- 加關係 ---------- */
+function openAddRelation(id){
+  const c = getCustomer(id);
+  if (DB.customers.length < 2){ alert("要至少兩位客戶才能建立關係。"); return; }
+  openSheet("加關係：" + c.name, `
+    <label>另一位</label>
+    ${customerPickerHTML("rel-pick", id)}
+    <label>關係種類</label>
+    <select id="rel-type">
+      ${DB.relationTypes.map(t => `<option value="${esc(t.key)}">${esc(t.label)}${t.directed ? "（有方向）" : ""}</option>`).join("")}
+    </select>
+    <div id="rel-dir-box" style="display:none;">
+      <label>方向</label>
+      <select id="rel-dir">
+        <option value="in">對方 是 ${esc(c.name)} 的引路人（對方介紹的）</option>
+        <option value="out">${esc(c.name)} 介紹了對方</option>
+      </select>
+    </div>
+    <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="rel-save">建立關係</button></div>
+  `);
+  wireCustomerPicker("rel-pick", id);
+  const typeSel = document.getElementById("rel-type");
+  const dirBox = document.getElementById("rel-dir-box");
+  const syncDir = () => { dirBox.style.display = relType(typeSel.value).directed ? "block" : "none"; };
+  typeSel.addEventListener("change", syncDir); syncDir();
+  document.getElementById("rel-save").addEventListener("click", () => {
+    const otherId = (document.getElementById("rel-pick") || {}).value;
+    if (!otherId){ alert("請先選另一位客戶。"); return; }
+    const type = typeSel.value;
+    const t = relType(type);
+    let from = id, to = otherId;
+    if (t.directed && document.getElementById("rel-dir").value === "in"){ from = otherId; to = id; }
+    const dup = DB.relations.some(r => r.type === type &&
+      ((r.from === from && r.to === to) || (!t.directed && r.from === to && r.to === from)));
+    if (dup){ alert("這兩位之間已經有同樣的關係了。"); return; }
+    DB.relations.push({id:uid("r"), from, to, type, createdAt:Date.now()});
+    save(); openDetail(id);
+  });
+}
+
+/* ---------- 關係圖 ---------- */
+const gview = {tx:0, ty:0, s:1, inited:false};
+let gHighlight = null;
+
+function ensurePositions(){
+  const need = DB.customers.filter(c => !c.pos);
+  if (!need.length) return;
+  forceLayout(need);
+  save();
+}
+function forceLayout(movable){
+  // movable：要重新排的節點；其餘視為固定
+  const all = DB.customers;
+  if (!all.length) return;
+  const fixedSet = new Set(all.filter(c => c.pos && !movable.includes(c)).map(c => c.id));
+  // 初始位置：固定的用原位，其他繞質心撒開
+  let cx = 0, cy = 0, n = 0;
+  all.forEach(c => { if (c.pos){ cx += c.pos.x; cy += c.pos.y; n++; } });
+  if (n){ cx /= n; cy /= n; } else { cx = 0; cy = 0; }
+  const pos = {};
+  all.forEach((c, i) => {
+    if (c.pos && fixedSet.has(c.id)) pos[c.id] = {x:c.pos.x, y:c.pos.y};
+    else {
+      const ang = i * 2.399963; // 黃金角，避免重疊
+      const rad = 60 + 26 * Math.sqrt(i + 1);
+      pos[c.id] = {x: cx + rad * Math.cos(ang), y: cy + rad * Math.sin(ang)};
+    }
+  });
+  const K = 130;
+  for (let it = 0; it < 220; it++){
+    const disp = {};
+    all.forEach(c => disp[c.id] = {x:0, y:0});
+    // 斥力
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++){
+      const a = all[i], b = all[j];
+      let dx = pos[a.id].x - pos[b.id].x, dy = pos[a.id].y - pos[b.id].y;
+      let d2 = dx*dx + dy*dy;
+      if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
+      const f = K * K / d2;
+      const d = Math.sqrt(d2);
+      disp[a.id].x += dx / d * f; disp[a.id].y += dy / d * f;
+      disp[b.id].x -= dx / d * f; disp[b.id].y -= dy / d * f;
+    }
+    // 引力（沿關係線）
+    DB.relations.forEach(r => {
+      const pa = pos[r.from], pb = pos[r.to];
+      if (!pa || !pb) return;
+      const dx = pa.x - pb.x, dy = pa.y - pb.y;
+      const d = Math.max(1, Math.sqrt(dx*dx + dy*dy));
+      const f = (d * d) / (K * 90);
+      disp[r.from].x -= dx / d * f * 60; disp[r.from].y -= dy / d * f * 60;
+      disp[r.to].x += dx / d * f * 60; disp[r.to].y += dy / d * f * 60;
+    });
+    // 向質心微聚
+    all.forEach(c => {
+      disp[c.id].x += (cx - pos[c.id].x) * 0.02;
+      disp[c.id].y += (cy - pos[c.id].y) * 0.02;
+    });
+    const temp = 14 * (1 - it / 220) + 1;
+    all.forEach(c => {
+      if (fixedSet.has(c.id)) return;
+      const d = Math.sqrt(disp[c.id].x**2 + disp[c.id].y**2) || 1;
+      pos[c.id].x += disp[c.id].x / d * Math.min(d, temp);
+      pos[c.id].y += disp[c.id].y / d * Math.min(d, temp);
+    });
+  }
+  all.forEach(c => { if (!fixedSet.has(c.id)) c.pos = {x:Math.round(pos[c.id].x), y:Math.round(pos[c.id].y)}; });
+}
+
+function fitView(){
+  const wrap = document.getElementById("graph-wrap");
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!DB.customers.length || !W) return;
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  DB.customers.forEach(c => {
+    minX = Math.min(minX, c.pos.x); maxX = Math.max(maxX, c.pos.x);
+    minY = Math.min(minY, c.pos.y); maxY = Math.max(maxY, c.pos.y);
+  });
+  const pad = 70;
+  const s = Math.min(1.4, Math.min(W / (maxX - minX + pad * 2 || 1), H / (maxY - minY + pad * 2 || 1)));
+  gview.s = Math.max(0.2, s);
+  gview.tx = W / 2 - (minX + maxX) / 2 * gview.s;
+  gview.ty = H / 2 - (minY + maxY) / 2 * gview.s;
+}
+
+function renderGraphLegend(){
+  const usedTypes = new Set(DB.relations.map(r => r.type));
+  const lg = document.getElementById("graph-legend");
+  lg.innerHTML =
+    Object.entries(WARMTH).map(([k,v]) =>
+      `<span class="lg"><span class="swdot" style="background:${v.raw}"></span>${v.label}</span>`).join("") +
+    DB.relationTypes.filter(t => usedTypes.has(t.key)).map(t =>
+      `<span class="lg"><span class="sw" style="background:${t.color}"></span>${esc(t.label)}</span>`).join("");
+}
+
+function renderGraph(){
+  ensurePositions();
+  const svg = document.getElementById("graph-svg");
+  const wrap = document.getElementById("graph-wrap");
+  renderGraphLegend();
+  if (!DB.customers.length){
+    svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="#8a7f70" font-size="14">還沒有客戶，先去「名單」新增。</text>`;
+    return;
+  }
+  if (!gview.inited){ fitView(); gview.inited = true; }
+
+  const R = 27;
+  const defs = `<defs>
+    ${DB.relationTypes.map(t => `<marker id="arrow-${esc(t.key)}" viewBox="0 0 10 10" refX="9" refY="5"
+      markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="${t.color}"/></marker>`).join("")}
+  </defs>`;
+
+  const edges = DB.relations.map(r => {
+    const a = getCustomer(r.from), b = getCustomer(r.to);
+    if (!a || !b) return "";
+    const t = relType(r.type);
+    const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+    const d = Math.sqrt(dx*dx + dy*dy) || 1;
+    const x1 = a.pos.x + dx / d * R, y1 = a.pos.y + dy / d * R;
+    const x2 = b.pos.x - dx / d * (R + (t.directed ? 6 : 0)), y2 = b.pos.y - dy / d * (R + (t.directed ? 6 : 0));
+    const dim = gHighlight && r.from !== gHighlight && r.to !== gHighlight;
+    return `<line class="gedge ${dim ? "dim" : ""}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+      stroke="${t.color}" stroke-width="2.2" ${t.directed ? `marker-end="url(#arrow-${esc(t.key)})"` : ""}
+      ${t.key === "intro" ? "" : 'stroke-dasharray="none"'} stroke-linecap="round" opacity="0.85"/>`;
+  }).join("");
+
+  const nodes = DB.customers.map(c => {
+    const w = WARMTH[c.warmth] || WARMTH.warm;
+    const dim = gHighlight && c.id !== gHighlight && !DB.relations.some(r =>
+      (r.from === gHighlight && r.to === c.id) || (r.to === gHighlight && r.from === c.id));
+    const hit = gHighlight === c.id;
+    const short = c.name.length > 3 ? c.name.slice(0, 3) : c.name;
+    return `<g class="gnode ${dim ? "dim" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${c.pos.x},${c.pos.y})">
+      <circle r="${R}" fill="${w.raw}" stroke="#fffdf9"/>
+      <text y="4.5">${esc(short)}</text>
+      <text y="${R + 15}" fill="#5c5346" font-weight="400" font-size="11">${esc(c.name.length > 3 ? c.name : "")}</text>
+    </g>`;
+  }).join("");
+
+  svg.innerHTML = defs + `<g id="gworld" transform="translate(${gview.tx},${gview.ty}) scale(${gview.s})">${edges}${nodes}</g>`;
+  wrap.style.backgroundPosition = gview.tx + "px " + gview.ty + "px";
+  const bs = 26 * gview.s;
+  wrap.style.backgroundSize = bs + "px " + bs + "px";
+}
+
+function applyGraphTransformOnly(){
+  const g = document.getElementById("gworld");
+  if (g) g.setAttribute("transform", `translate(${gview.tx},${gview.ty}) scale(${gview.s})`);
+  const wrap = document.getElementById("graph-wrap");
+  wrap.style.backgroundPosition = gview.tx + "px " + gview.ty + "px";
+  const bs = 26 * gview.s;
+  wrap.style.backgroundSize = bs + "px " + bs + "px";
+}
+
+/* 手勢：單指拖背景=平移、單指拖節點=移動節點、雙指=縮放、輕點節點=詳情 */
+(function(){
+  const wrap = document.getElementById("graph-wrap");
+  const pointers = new Map();
+  let mode = null;           // "pan" | "node" | "pinch"
+  let dragNode = null;       // customer object
+  let startPt = null, moved = false;
+  let pinchStart = null;
+
+  function toWorld(x, y){
+    const r = wrap.getBoundingClientRect();
+    return {x: (x - r.left - gview.tx) / gview.s, y: (y - r.top - gview.ty) / gview.s};
+  }
+
+  wrap.addEventListener("pointerdown", e => {
+    wrap.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (pointers.size === 2){
+      mode = "pinch";
+      dragNode = null;
+      const pts = [...pointers.values()];
+      pinchStart = {
+        d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        mid: {x:(pts[0].x + pts[1].x)/2, y:(pts[0].y + pts[1].y)/2},
+        s: gview.s, tx: gview.tx, ty: gview.ty,
+      };
+      return;
+    }
+    const nodeEl = e.target.closest(".gnode");
+    moved = false;
+    startPt = {x:e.clientX, y:e.clientY, tx:gview.tx, ty:gview.ty};
+    if (nodeEl){
+      mode = "node";
+      dragNode = getCustomer(nodeEl.dataset.nid);
+    } else {
+      mode = "pan";
+    }
+  });
+
+  wrap.addEventListener("pointermove", e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (mode === "pinch" && pointers.size >= 2){
+      const pts = [...pointers.values()];
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const mid = {x:(pts[0].x + pts[1].x)/2, y:(pts[0].y + pts[1].y)/2};
+      const ns = Math.min(3, Math.max(0.15, pinchStart.s * d / (pinchStart.d || 1)));
+      const r = wrap.getBoundingClientRect();
+      // 讓縮放圍繞雙指中點
+      const wx = (pinchStart.mid.x - r.left - pinchStart.tx) / pinchStart.s;
+      const wy = (pinchStart.mid.y - r.top - pinchStart.ty) / pinchStart.s;
+      gview.s = ns;
+      gview.tx = mid.x - r.left - wx * ns;
+      gview.ty = mid.y - r.top - wy * ns;
+      applyGraphTransformOnly();
+      return;
+    }
+    if (!startPt) return;
+    const dx = e.clientX - startPt.x, dy = e.clientY - startPt.y;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
+    if (mode === "pan"){
+      gview.tx = startPt.tx + dx; gview.ty = startPt.ty + dy;
+      applyGraphTransformOnly();
+    } else if (mode === "node" && dragNode && moved){
+      const w = toWorld(e.clientX, e.clientY);
+      dragNode.pos = {x:Math.round(w.x), y:Math.round(w.y)};
+      renderGraph();
+    }
+  });
+
+  function up(e){
+    pointers.delete(e.pointerId);
+    if (mode === "pinch"){
+      if (pointers.size < 2){ mode = null; pinchStart = null; }
+      return;
+    }
+    if (mode === "node" && dragNode){
+      if (moved){ save(); }
+      else openDetail(dragNode.id);
+    }
+    mode = null; dragNode = null; startPt = null;
+  }
+  wrap.addEventListener("pointerup", up);
+  wrap.addEventListener("pointercancel", up);
+})();
+
+document.getElementById("graph-search").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q){ gHighlight = null; renderGraph(); return; }
+  const hit = DB.customers.find(c => (c.name + " " + c.company).toLowerCase().includes(q));
+  gHighlight = hit ? hit.id : null;
+  if (hit){
+    const wrap = document.getElementById("graph-wrap");
+    gview.tx = wrap.clientWidth / 2 - hit.pos.x * gview.s;
+    gview.ty = wrap.clientHeight / 2 - hit.pos.y * gview.s;
+  }
+  renderGraph();
+});
+document.getElementById("btn-relayout").addEventListener("click", () => {
+  if (!DB.customers.length) return;
+  if (!confirm("整理版面會重新自動排列所有節點，你手動拖過的位置會被重排。確定？")) return;
+  DB.customers.forEach(c => c.pos = null);
+  ensurePositions();
+  gview.inited = false;
+  renderGraph();
+});
+
+/* ---------- 設定 ---------- */
+function renderSettings(){
+  const st = document.getElementById("backup-status");
+  st.innerHTML = DB.lastBackupAt
+    ? "上次備份：" + new Date(DB.lastBackupAt).toLocaleString("zh-TW", {hour12:false})
+    : "<b style='color:var(--danger)'>還沒有備份過</b>";
+  document.getElementById("stats-body").textContent =
+    `${DB.customers.length} 位客戶、${DB.relations.length} 條關係、${DB.interactions.length} 筆互動紀錄`;
+
+  const rl = document.getElementById("reltype-list");
+  rl.innerHTML = DB.relationTypes.map(t => {
+    const used = DB.relations.filter(r => r.type === t.key).length;
+    return `<div class="row" style="margin-bottom:6px;">
+      <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${t.color};"></span>
+      <span class="grow">${esc(t.label)}${t.directed ? "（有方向）" : ""} <span class="muted">${used ? used + " 條" : ""}</span></span>
+      ${t.builtin ? "" : `<button class="btn small" data-deltype="${esc(t.key)}" ${used ? "disabled" : ""}>${used ? "使用中" : "刪"}</button>`}
+    </div>`;
+  }).join("");
+  rl.querySelectorAll("[data-deltype]").forEach(b => b.addEventListener("click", () => {
+    DB.relationTypes = DB.relationTypes.filter(t => t.key !== b.dataset.deltype);
+    save(); renderSettings();
+  }));
+}
+document.getElementById("btn-add-reltype").addEventListener("click", () => {
+  const label = document.getElementById("new-reltype").value.trim();
+  if (!label){ alert("請輸入種類名稱。"); return; }
+  if (DB.relationTypes.some(t => t.label === label)){ alert("已經有同名的種類了。"); return; }
+  const directed = document.getElementById("new-reltype-directed").checked;
+  const color = CUSTOM_COLORS[DB.relationTypes.length % CUSTOM_COLORS.length];
+  DB.relationTypes.push({key:uid("t"), label, directed, color, builtin:false});
+  document.getElementById("new-reltype").value = "";
+  document.getElementById("new-reltype-directed").checked = false;
+  save(); renderSettings();
+});
+
+/* 匯出備份 */
+document.getElementById("btn-export").addEventListener("click", async () => {
+  const stamp = todayStr();
+  const json = JSON.stringify(DB, null, 2);
+  const filename = `人脈圖備份-${stamp}.json`;
+  const file = new File([json], filename, {type:"application/json"});
+  let done = false;
+  if (navigator.canShare && navigator.canShare({files:[file]})){
+    try {
+      await navigator.share({files:[file], title:"人脈圖備份"});
+      done = true;
+    } catch(e){
+      if (e && e.name === "AbortError") return; // 使用者取消，不算備份
+    }
+  }
+  if (!done){
+    const url = URL.createObjectURL(new Blob([json], {type:"application/json"}));
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    done = true;
+  }
+  if (done){
+    DB.lastBackupAt = new Date().toISOString();
+    save(); renderSettings();
+  }
+});
+
+/* 匯入備份 */
+document.getElementById("btn-import").addEventListener("click", () => document.getElementById("import-file").click());
+document.getElementById("import-file").addEventListener("change", e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let incoming;
+    try { incoming = migrate(JSON.parse(reader.result)); }
+    catch(err){ alert("這個檔案不是有效的人脈圖備份：" + err.message); return; }
+    if (!confirm(`備份內有 ${incoming.customers.length} 位客戶、${incoming.interactions.length} 筆紀錄。\n將整份取代目前資料（目前 ${DB.customers.length} 位客戶）。確定匯入？`)) return;
+    DB = incoming;
+    save(); gview.inited = false;
+    alert("匯入完成。");
+    showView("home");
+  };
+  reader.readAsText(f, "utf-8");
+});
+
+/* ---------- 啟動 ---------- */
+DB = loadDB();
+renderHeadStats();
+showView("home");
+window.addEventListener("resize", () => { if (currentView === "graph") renderGraph(); });
+if ("serviceWorker" in navigator){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
