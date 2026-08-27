@@ -208,6 +208,10 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
   fill:var(--ink-soft); font-weight:700; text-anchor:start; pointer-events:none; letter-spacing:1px;
   paint-order:stroke; stroke:var(--paper); stroke-width:3.5px; stroke-linejoin:round;
 }
+.slabel{
+  fill:var(--ink-soft); font-weight:500; text-anchor:middle; pointer-events:none;
+  paint-order:stroke; stroke:var(--paper); stroke-width:3px; stroke-linejoin:round;
+}
 .nlabel{
   fill:var(--ink); font-weight:600; text-anchor:middle; pointer-events:none;
   paint-order:stroke; stroke:var(--paper); stroke-width:3.5px; stroke-linejoin:round;
@@ -346,6 +350,14 @@ const WARMTH = {
   warm: {label:"溫"},
   cold: {label:"冷"},
 };
+const ROLES = {
+  customer: {label:"顧客"},
+  partner:  {label:"夥伴"},
+  both:     {label:"夥伴＋顧客"},
+};
+function roleOf(c){ return ROLES[c && c.role] ? c.role : "customer"; }
+function isPartner(c){ return roleOf(c) !== "customer"; }
+
 const SKIN_WARMTH = {
   nuskin: {hot:"#c81d1d", warm:"#252525", cold:"#c3c9cf"},
   paper:  {hot:"#c2571a", warm:"#d99a2b", cold:"#7d8b99"},
@@ -383,6 +395,7 @@ function inlineRename(el, current, onDone){
   inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
 }
 const DEFAULT_RELTYPES = [
+  {key:"upline",    label:"上線",   directed:true,  color:"#1f6f8b", builtin:true, tree:true},
   {key:"intro",     label:"介紹人", directed:true,  color:"#c81d1d", builtin:true},
   {key:"family",    label:"家人",   directed:false, color:"#7a6172", builtin:true},
   {key:"friend",    label:"朋友",   directed:false, color:"#5c7a68", builtin:true},
@@ -444,6 +457,39 @@ function relationsOf(id){ return DB.relations.filter(r => r.from === id || r.to 
 function interactionsOf(id){
   return DB.interactions.filter(i => i.customerId === id).sort((a,b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 }
+/* ===== 直銷組織：上下線樹 ===== */
+function uplineOf(id){
+  const r = DB.relations.find(x => x.type === "upline" && x.to === id);
+  return r ? r.from : null;
+}
+function downlinesOf(id){
+  return DB.relations.filter(x => x.type === "upline" && x.from === id).map(x => x.to);
+}
+function generationOf(id){
+  let depth = 1, cur = id, guard = 0;
+  while (guard++ < 200){
+    const up = uplineOf(cur);
+    if (!up) break;
+    depth++; cur = up;
+  }
+  return depth;
+}
+function orgMembers(id){
+  const out = [], seen = new Set([id]), stack = [id];
+  while (stack.length){
+    const cur = stack.pop();
+    downlinesOf(cur).forEach(d => {
+      if (seen.has(d)) return;      // 防呆：資料若成環不會無限迴圈
+      seen.add(d); out.push(d); stack.push(d);
+    });
+  }
+  return out;
+}
+function orgSize(id){ return orgMembers(id).length; }
+function orgSpend(id){
+  return spentOf(id) + orgMembers(id).reduce((t, x) => t + spentOf(x), 0);
+}
+
 function purchasesOf(id){
   return DB.purchases.filter(x => x.customerId === id)
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
@@ -519,7 +565,8 @@ function searchCustomers(q){
 function personRowHTML(c){
   const lc = lastContact(c.id);
   const sp = spentOf(c.id);
-  const meta = [c.company, sp ? "累計 " + money(sp) : "", (c.tags||[]).map(t => "#" + t).join(" "),
+  const dl = downlinesOf(c.id).length;
+  const meta = [isPartner(c) ? (dl ? "夥伴・直屬 " + dl + " 人" : "夥伴") : "", c.company, sp ? "累計 " + money(sp) : "", (c.tags||[]).map(t => "#" + t).join(" "),
     lc ? ("上次聯絡 " + lc) : "尚無互動紀錄"].filter(Boolean).join("・");
   return `<div class="person" data-open="${c.id}">
     <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
@@ -591,7 +638,29 @@ function renderHomeInsights(){
   const lastBuy = DB.purchases.slice()
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)[0];
   const noBuy = DB.customers.filter(c => c.warmth === "hot" && !purchasesOf(c.id).length);
+  // 直銷組織相關
+  const partners = DB.customers.filter(isPartner);
+  const thisMonth = todayStr().slice(0, 7);
+  const newPartners = partners.filter(c => {
+    const d = new Date(c.createdAt || 0);
+    const ym = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    return ym === thisMonth;
+  });
+  const stalled = partners.filter(c => !downlinesOf(c.id).length);
+  const topOrg = partners.map(c => ({c, v: orgSize(c.id)})).filter(x => x.v > 0)
+    .sort((a, b) => b.v - a.v)[0];
+  const orgRows = partners.length ? [
+    line("組織規模", `<b>${partners.length}</b> 位夥伴` +
+      (topOrg ? `　最大線 ${nameLink(topOrg.c)}（${topOrg.v} 人）` : "")),
+    newPartners.length ? line("本月新夥伴", newPartners.slice(0, 3).map(nameLink).join("、") +
+      (newPartners.length > 3 ? ` <span class="muted">…共 ${newPartners.length} 位</span>` : "")) : "",
+    stalled.length ? line("斷層夥伴", stalled.slice(0, 3).map(nameLink).join("、") +
+      (stalled.length > 3 ? ` <span class="muted">…共 ${stalled.length} 位</span>` : "") +
+      ` <span class="muted">底下還沒有下線</span>`) : "",
+  ].filter(Boolean) : [];
+
   const rows = [
+    ...orgRows,
     spender ? line("消費最高", nameLink(spender.c) + ` <span class="muted">累計 ${money(spender.v)}</span>`) : "",
     lastBuy && getCustomer(lastBuy.customerId) ? line("最近成交", nameLink(getCustomer(lastBuy.customerId)) + ` <span class="muted">${esc(lastBuy.item)}・${esc(lastBuy.date)}</span>`) : "",
     noBuy.length ? line("熟但沒成交", noBuy.slice(0, 3).map(nameLink).join("、") + (noBuy.length > 3 ? ` <span class="muted">…共 ${noBuy.length} 位</span>` : "")) : "",
@@ -632,7 +701,9 @@ let listWarmth = "all";
 let listTag = "all";
 function renderList(){
   const wf = document.getElementById("list-warmth-filter");
-  const options = [["all","全部"],["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")],["_buy","有成交"],["_nobuy","未成交"]];
+  const options = [["all","全部"],["_partner","夥伴"],["_customer","純顧客"],
+    ["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")],
+    ["_buy","有成交"],["_nobuy","未成交"]];
   wf.innerHTML = options.map(([k,l]) =>
     `<button class="fbtn ${listWarmth===k?"on":""}" data-w="${k}">${l}</button>`).join("");
   wf.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { listWarmth = b.dataset.w; renderList(); }));
@@ -646,7 +717,9 @@ function renderList(){
   } else tf.innerHTML = "";
 
   let list = DB.customers.slice().sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"));
-  if (listWarmth === "_buy") list = list.filter(c => purchasesOf(c.id).length);
+  if (listWarmth === "_partner") list = list.filter(c => isPartner(c));
+  else if (listWarmth === "_customer") list = list.filter(c => !isPartner(c));
+  else if (listWarmth === "_buy") list = list.filter(c => purchasesOf(c.id).length);
   else if (listWarmth === "_nobuy") list = list.filter(c => !purchasesOf(c.id).length);
   else if (listWarmth !== "all") list = list.filter(c => c.warmth === listWarmth);
   if (listTag !== "all") list = list.filter(c => (c.tags||[]).includes(listTag));
@@ -663,7 +736,9 @@ function relationLabel(r, viewpointId){
   const other = getCustomer(otherId);
   const otherName = other ? other.name : "（已刪除）";
   let text;
-  if (t.directed){
+  if (t.key === "upline"){
+    text = r.from === viewpointId ? `下線：${otherName}` : `上線：${otherName}`;
+  } else if (t.directed){
     text = r.from === viewpointId ? `介紹了 ${otherName}` : `${otherName} 介紹（引路人）`;
     if (t.key !== "intro") text = r.from === viewpointId ? `${t.label} → ${otherName}` : `${otherName} → ${t.label}`;
   } else {
@@ -687,8 +762,25 @@ function openDetail(id){
   openSheet(c.name, `
     <div>
       <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span>
+      ${isPartner(c) ? `<span class="chip" style="background:#1f6f8b;color:#fff;">${esc(ROLES[roleOf(c)].label)}</span>` : ""}
       ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
     </div>
+    ${(() => {
+      const up = uplineOf(id), downs = downlinesOf(id), sz = orgSize(id);
+      if (!up && !downs.length && !isPartner(c)) return "";
+      const upc = up ? getCustomer(up) : null;
+      const os = orgSpend(id);
+      return `<div class="card" style="margin-top:12px;">
+        <div style="font-weight:700; margin-bottom:6px;">組織</div>
+        <div class="muted">第 ${generationOf(id)} 代　直屬下線 ${downs.length} 人　整條線 ${sz} 人</div>
+        <div class="muted">上線：${upc ? `<span data-open="${upc.id}" style="color:var(--brand-red);cursor:pointer;">${esc(upc.name)}</span>` : "無（最上層）"}</div>
+        ${os ? `<div class="muted">組織業績累計 ${money(os)}（本人 ${money(spentOf(id))}）</div>` : ""}
+        ${downs.length ? `<div style="margin-top:6px;">${downs.map(d => {
+          const dc = getCustomer(d);
+          return dc ? `<span class="chip tag" data-open="${d}" style="cursor:pointer;">${esc(dc.name)}${orgSize(d) ? "（+" + orgSize(d) + "）" : ""}</span>` : "";
+        }).join("")}</div>` : ""}
+      </div>`;
+    })()}
     ${fields.map(f => `<div style="margin-top:8px;"><span class="muted">${f[0]}</span>　${f[1]}</div>`).join("")}
     ${c.preference ? `<div style="margin-top:10px;"><span class="muted">偏好／需求</span>
       <div class="card" style="margin-top:4px; white-space:pre-wrap;">${esc(c.preference)}</div></div>` : ""}
@@ -770,6 +862,11 @@ function openEdit(id){
     <label>公司／職業</label><input type="text" id="f-company" value="${esc(c ? c.company : "")}">
     <label>怎麼認識的</label><input type="text" id="f-source" value="${esc(c ? c.source : "")}" placeholder="例：老王介紹、社團活動…">
     <label>標籤（用逗號分隔）</label><input type="text" id="f-tags" value="${esc(c ? (c.tags||[]).join("、") : "")}" placeholder="例：保險、高潛力、台中">
+    <label>身份</label>
+    <div class="filterbar" id="f-role">
+      ${Object.keys(ROLES).map(k =>
+        `<button class="fbtn ${roleOf(c || {}) === k ? "on" : ""}" data-k="${k}">${esc(ROLES[k].label)}</button>`).join("")}
+    </div>
     <label>熟度</label>
     <div class="filterbar" id="f-warmth">
       ${Object.keys(WARMTH).map(k =>
@@ -781,6 +878,11 @@ function openEdit(id){
       <button class="btn primary grow" id="f-save">儲存</button>
     </div>
   `);
+  let role = roleOf(c || {});
+  document.querySelectorAll("#f-role .fbtn").forEach(b => b.addEventListener("click", () => {
+    role = b.dataset.k;
+    document.querySelectorAll("#f-role .fbtn").forEach(x => x.classList.toggle("on", x === b));
+  }));
   let warmth = (c && c.warmth) || "warm";
   document.querySelectorAll("#f-warmth .fbtn").forEach(b => b.addEventListener("click", () => {
     warmth = b.dataset.k;
@@ -795,7 +897,7 @@ function openEdit(id){
       phone: document.getElementById("f-phone").value.trim(),
       company: document.getElementById("f-company").value.trim(),
       source: document.getElementById("f-source").value.trim(),
-      tags, warmth,
+      tags, warmth, role,
       preference: document.getElementById("f-pref").value.trim(),
       note: document.getElementById("f-note").value.trim(),
       updatedAt: Date.now(),
@@ -891,8 +993,8 @@ function openAddRelation(id){
     <div id="rel-dir-box" style="display:none;">
       <label>方向</label>
       <select id="rel-dir">
-        <option value="in">對方 是 ${esc(c.name)} 的引路人（對方介紹的）</option>
-        <option value="out">${esc(c.name)} 介紹了對方</option>
+        <option value="in">對方 是 ${esc(c.name)} 的上線／引路人</option>
+        <option value="out">${esc(c.name)} 是對方的上線／介紹人</option>
       </select>
     </div>
     <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="rel-save">建立關係</button></div>
@@ -912,6 +1014,19 @@ function openAddRelation(id){
     const dup = DB.relations.some(r => r.type === type &&
       ((r.from === from && r.to === to) || (!t.directed && r.from === to && r.to === from)));
     if (dup){ alert("這兩位之間已經有同樣的關係了。"); return; }
+    if (t.tree){
+      if (from === to){ alert("不能把自己設成自己的上線。"); return; }
+      // 防環：新的上線若已在自己的組織底下，會形成迴圈
+      if (orgMembers(to).includes(from)){
+        alert("這樣會繞成一個圈（對方已經在你這條線底下），請確認上下線方向。"); return;
+      }
+      const exist = DB.relations.find(r => r.type === "upline" && r.to === to);
+      if (exist){
+        const cur = getCustomer(exist.from);
+        if (!confirm(`${getCustomer(to).name} 目前的上線是「${cur ? cur.name : "（已刪除）"}」。\n一個人只能有一個上線，要改成「${getCustomer(from).name}」嗎？`)) return;
+        DB.relations = DB.relations.filter(r => r.id !== exist.id);
+      }
+    }
     DB.relations.push({id:uid("r"), from, to, type, createdAt:Date.now()});
     save(); openDetail(id);
   });
@@ -919,7 +1034,9 @@ function openAddRelation(id){
 
 /* ---------- 關係圖 ---------- */
 const gview = {tx:0, ty:0, s:1, inited:false};
-let gMode = "net";          // net=網絡 intro=轉介鏈
+let gMode = "net";          // net=網絡 org=組織圖 intro=轉介鏈
+const TREE_REL = {org:"upline", intro:"intro"};
+let gDepth = {};            // 樹狀模式下各節點的代數
 let gFocus = null;          // 聚焦的客戶 id
 let gFocusDepth = 1;        // 1=直接關係 2=第二層
 let gFilterWarmth = null;
@@ -1130,16 +1247,17 @@ function forceLayout(movable){
   all.forEach(c => { if (!fixedSet.has(c.id)) c.pos = {x:Math.round(pos[c.id].x), y:Math.round(pos[c.id].y)}; });
 }
 
-function nodePos(c){ return gMode === "intro" ? gIntroPos[c.id] : c.pos; }
+function nodePos(c){ return TREE_REL[gMode] ? gIntroPos[c.id] : c.pos; }
 
 function visibleCustomers(){
   let list = DB.customers;
   if (gFilterWarmth) list = list.filter(c => c.warmth === gFilterWarmth);
   if (gFilterTag) list = list.filter(c => (c.tags || []).includes(gFilterTag));
-  if (gMode === "intro"){
-    const inIntro = new Set();
-    DB.relations.filter(r => r.type === "intro").forEach(r => { inIntro.add(r.from); inIntro.add(r.to); });
-    list = list.filter(c => inIntro.has(c.id));
+  if (TREE_REL[gMode]){
+    const key = TREE_REL[gMode];
+    const inTree = new Set();
+    DB.relations.filter(r => r.type === key).forEach(r => { inTree.add(r.from); inTree.add(r.to); });
+    list = list.filter(c => inTree.has(c.id));
   }
   return list;
 }
@@ -1180,6 +1298,8 @@ function layoutIntroTree(vis, rels){
   }
   roots.forEach(r => { place(r, 0); cursor++; });
   ids.forEach(id => { if (!pos[id]){ pos[id] = {x: cursor * XS, y: 0}; cursor++; } });
+  gDepth = {};
+  ids.forEach(id => { gDepth[id] = Math.round(pos[id].y / YS) + 1; });
   return pos;
 }
 
@@ -1213,6 +1333,7 @@ function renderGraphChips(){
   const tags = [...new Set(DB.customers.flatMap(c => c.tags || []))].sort().slice(0, 8);
   el.innerHTML =
     `<button class="fbtn ${gMode === "net" ? "on" : ""}" data-gmode="net">網絡</button>` +
+    `<button class="fbtn ${gMode === "org" ? "on" : ""}" data-gmode="org">組織圖</button>` +
     `<button class="fbtn ${gMode === "intro" ? "on" : ""}" data-gmode="intro">轉介鏈</button>` +
     `<span style="flex:0 0 1px; background:var(--line); align-self:stretch;"></span>` +
     ["hot", "warm", "cold"].map(k =>
@@ -1237,7 +1358,7 @@ function renderGraphLegend(){
   lg.innerHTML =
     Object.keys(WARMTH).map(k =>
       `<span class="lg"><span class="swdot" style="background:${warmthColor(k)}"></span>${esc(warmthLabel(k))}</span>`).join("") +
-    DB.relationTypes.filter(t => usedTypes.has(t.key) && (gMode === "net" || t.key === "intro")).map(t =>
+    DB.relationTypes.filter(t => usedTypes.has(t.key) && (gMode === "net" || t.key === TREE_REL[gMode])).map(t =>
       `<span class="lg"><span class="sw" style="background:${t.color}"></span>${esc(t.label)}</span>`).join("");
 }
 
@@ -1247,9 +1368,12 @@ function updateFocusBar(id){
   if (!c){ bar.style.display = "none"; bar.innerHTML = ""; return; }
   const dz = dormantInfo(id);
   bar.style.display = "flex";
+  const orgTxt = isPartner(c) || uplineOf(id) || downlinesOf(id).length
+    ? `第 ${generationOf(id)} 代・直屬 ${downlinesOf(id).length}・線上 ${orgSize(id)} 人`
+    : (dz.days == null ? "從未互動" : "上次聯絡 " + dz.days + " 天前");
   bar.innerHTML = `<span style="font-weight:700;">${esc(c.name)}</span>
     <span class="chip warmth-${c.warmth}" style="margin:0;">${esc(warmthLabel(c.warmth))}</span>
-    <span class="muted grow">${dz.days == null ? "從未互動" : "上次聯絡 " + dz.days + " 天前"}</span>
+    <span class="muted grow">${esc(orgTxt)}</span>
     <button class="btn small" id="fb-detail">詳情</button>
     <button class="btn small" id="fb-depth">${gFocusDepth === 1 ? "第二層" : "收回"}</button>
     <button class="btn small" id="fb-close">關閉</button>`;
@@ -1314,6 +1438,14 @@ function groupHullsSVG(vis){
 }
 
 /* 內容實際範圍：含節點姓名與群名文字所佔空間（文字字級隨縮放反向變動，故需指定 s） */
+function orgSubLabel(c){
+  const dn = downlinesOf(c.id).length, sz = orgSize(c.id), os = orgSpend(c.id);
+  const bits = [`直屬 ${dn}`];
+  if (sz > dn) bits.push(`線上 ${sz}`);
+  if (os) bits.push(money(os).replace("NT$ ", "$"));
+  return bits.join("・");
+}
+
 function contentBounds(list, sc){
   let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
   const add = (a, b, c, d) => {
@@ -1324,8 +1456,12 @@ function contentBounds(list, sc){
   const ns = Math.min(72, 12 / Math.max(sc, 0.12));
   list.forEach(c => {
     const pt = nodePos(c); if (!pt) return;
-    const halfW = Math.max(R, c.name.length * ns * 0.55);
-    add(pt.x - halfW, pt.y - R, pt.x + halfW, pt.y + R + ns * 1.3);
+    let halfW = Math.max(R, c.name.length * ns * 0.55);
+    if (gMode === "org"){
+      // 組織圖的小字（直屬／線上／業績）比姓名長，不算進去最外側節點會被切掉
+      halfW = Math.max(halfW, orgSubLabel(c).length * ns * 0.8 * 0.55);
+    }
+    add(pt.x - halfW, pt.y - R, pt.x + halfW, pt.y + R + ns * (gMode === "org" ? 2.5 : 1.3));
   });
   const hs = Math.min(80, 13 / Math.max(sc, 0.12));
   groupBlocks(list).forEach(b => {
@@ -1343,7 +1479,8 @@ function renderGraph(){
   if (gFocus && !vis.some(c => c.id === gFocus)){ gFocus = null; gFocusDepth = 1; }
   if (!vis.length){
     const msg = DB.customers.length
-      ? (gMode === "intro" ? "還沒有任何「介紹人」關係。" : "沒有符合篩選的客戶。")
+      ? (gMode === "org" ? "還沒有任何上下線關係。到客戶詳情按「加關係」建立上線。"
+        : gMode === "intro" ? "還沒有任何「介紹人」關係。" : "沒有符合篩選的客戶。")
       : "還沒有客戶，先去「名單」新增。";
     svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="#8a8a8a" font-size="14">${msg}</text>`;
     updateFocusBar(null);
@@ -1351,8 +1488,8 @@ function renderGraph(){
   }
   const visSet = new Set(vis.map(c => c.id));
   let rels = DB.relations.filter(r => visSet.has(r.from) && visSet.has(r.to));
-  if (gMode === "intro"){
-    rels = rels.filter(r => r.type === "intro");
+  if (TREE_REL[gMode]){
+    rels = rels.filter(r => r.type === TREE_REL[gMode]);
     gIntroPos = layoutIntroTree(vis, rels);
   } else {
     ensurePositions();
@@ -1407,9 +1544,16 @@ function renderGraph(){
     const hit = gFocus === c.id;
     // 姓名一律畫在圓下方（反向縮放，螢幕字級恆定），圓本身只當熟度色點，不再重複放字
     const ns = Math.min(72, 12 / Math.max(gview.s, 0.12));
+    const partner = isPartner(c);
+    const subTxt = gMode === "org" ? orgSubLabel(c) : "";
+    const sub = subTxt
+      ? `<text class="slabel" y="${R + ns * 2.0}" font-size="${(ns * 0.8).toFixed(1)}">${esc(subTxt)}</text>`
+      : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${pt.x},${pt.y})">
+      ${partner ? `<circle r="${R + 5}" fill="none" stroke="#1f6f8b" stroke-width="2.5" opacity="0.9"/>` : ""}
       <circle r="${R}" fill="${wc}" stroke="#ffffff"/>
       <text class="nlabel" y="${R + ns * 0.95}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
+      ${sub}
     </g>`;
   }).join("");
 
@@ -1529,7 +1673,7 @@ document.getElementById("graph-search").addEventListener("input", e => {
 });
 document.getElementById("btn-relayout").addEventListener("click", () => {
   if (!DB.customers.length) return;
-  if (gMode === "intro"){ alert("轉介鏈視圖是自動排版，切回「網絡」才能整理版面。"); return; }
+  if (TREE_REL[gMode]){ alert("樹狀視圖是自動排版，切回「網絡」才能整理版面。"); return; }
   if (!confirm("整理版面會重新自動排列所有節點，你手動拖過的位置會被重排。確定？")) return;
   DB.customers.forEach(c => c.pos = null);
   ensurePositions();
