@@ -17,14 +17,20 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   if (e.request.mode === "navigate" || e.request.destination === "document") {
+    // 只有主頁的回應能寫進 index.html 的快取；其他頁（例如 demo.html）若也寫入，
+    // 會讓主 App 離線時顯示錯的頁面
+    const path = new URL(e.request.url).pathname;
+    const isMain = path.endsWith("/") || path.endsWith("/index.html");
     e.respondWith(
       fetch(e.request)
         .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put("./index.html", copy));
+          if (isMain){
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put("./index.html", copy));
+          }
           return res;
         })
-        .catch(() => caches.match("./index.html"))
+        .catch(() => caches.match(isMain ? "./index.html" : e.request))
     );
     return;
   }
