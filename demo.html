@@ -9,37 +9,35 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <style>
 :root{
-  --paper:#ffffff; --card:#ffffff; --ink:#252525; --ink-soft:#6c757d;
-  --line:#e9e9e9; --line-strong:#d9d9d9; --card-line:#ececec;
-  --accent:#252525; --brand-red:#c81d1d; --accent-soft:#ededed;
-  --btn-line:#252525; --btn-primary:#212121; --partner:#1f6f8b;
-  --hot:#c81d1d; --warm:#252525; --cold:#c3c9cf; --cold-fg:#252525;
-  --hot-bg:#f9e4e4; --warm-bg:#ededed; --cold-bg:#f2f4f5;
-  --danger:#a80b0b; --danger-bg:#faeaea;
-  --r-btn:999px; --r-card:0; --r-input:0; --r-person:0;
-  --dot:#ececec; --font-head:"Lora","Songti TC","Noto Serif TC",serif;
+  /* 主色與文字灰階取自 Nu Skin 台灣官網 CSS 實際值（logo／按鈕／連結色） */
+  --paper:#ffffff; --card:#ffffff; --ink:#272525; --ink-soft:#63666a;
+  --line:#eef1f3; --line-strong:#d8d8d8; --card-line:#e5e5e5;
+  --accent:#008ab0; --accent-soft:#e6f4f8; --accent-wash:#f4fafc;
+  --accent-hover:#00738f; --accent-active:#005f77;
+  --btn-line:#d8d8d8; --btn-primary:#008ab0; --partner:#00708f;
+  /* 熟度用暖橘做「熱」的語意，與青藍主色互補、小圓點也分得出來 */
+  --hot:#c0561f; --warm:#4a4a4a; --cold:#b9c2c8; --cold-fg:#ffffff;
+  --hot-bg:#fbeee6; --warm-bg:#eef0f1; --cold-bg:#f3f6f7;
+  --danger:#b3261e; --danger-bg:#fbeae8;
+  --logo:#c81d1d;                       /* 沿用原本的識別色，不隨主題走 */
+  --surface-sunken:#f5f8fa; --surface-hover:#eef4f7;
+  --shadow-rgb:28 46 56;
+  --shadow-sm:0 1px 2px rgb(var(--shadow-rgb)/.05), 0 2px 6px rgb(var(--shadow-rgb)/.05);
+  --shadow-md:0 2px 4px rgb(var(--shadow-rgb)/.06), 0 8px 20px rgb(var(--shadow-rgb)/.07);
+  --r-btn:999px; --r-card:12px; --r-input:8px; --r-person:12px;
+  --dot:#e9edf0;
+  --font-head:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei UI",sans-serif;
   --nav-h:58px;
-}
-body.skin-paper{
-  --paper:#faf6f0; --card:#ffffff; --ink:#3a3128; --ink-soft:#6f6457;
-  --line:#e7ddd0; --line-strong:#e7ddd0; --card-line:#e7ddd0;
-  --accent:#c2571a; --brand-red:#c2571a; --accent-soft:#f4e3d5;
-  --btn-line:#e7ddd0; --btn-primary:#c2571a; --partner:#1f6f8b;
-  --hot:#c2571a; --warm:#d99a2b; --cold:#7d8b99; --cold-fg:#ffffff;
-  --hot-bg:#f7e2d3; --warm-bg:#f8ecd2; --cold-bg:#e5eaef;
-  --danger:#b3372f; --danger-bg:#f6e0de;
-  --r-btn:10px; --r-card:14px; --r-input:10px; --r-person:12px;
-  --dot:#eee4d6; --font-head:"PingFang TC","Microsoft JhengHei UI",sans-serif;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0; padding:0; height:100%;}
 body{
   background:var(--paper); color:var(--ink);
-  font-family:"Inter","PingFang TC","Microsoft JhengHei UI","Noto Sans CJK TC",system-ui,sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei UI",system-ui,sans-serif;
+  letter-spacing:.02em;
   font-size:16px; line-height:1.55;
   overscroll-behavior:none;
 }
-.serif{font-family:"Lora","Songti TC","Noto Serif TC",serif;}
 button{font-family:inherit;}
 input,textarea,select{
   font-family:inherit; font-size:16px; color:var(--ink);
@@ -60,7 +58,7 @@ header{
 header .brand-mark{width:26px; height:26px; flex:0 0 auto;}
 header h1{align-self:baseline;}
 header .sub{align-self:baseline;}
-header h1{font-size:21px; margin:0; letter-spacing:3px; font-family:var(--font-head); font-weight:500;}
+header h1{font-size:20px; margin:0; letter-spacing:.34em; font-family:var(--font-head); font-weight:600; color:var(--ink);}
 header .sub{font-size:12px; color:var(--ink-soft);}
 main{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);}
 .view{display:none; padding:16px;}
@@ -72,7 +70,8 @@ nav#tabbar{
   position:fixed; left:0; right:0; bottom:0;
   height:calc(var(--nav-h) + env(safe-area-inset-bottom));
   padding-bottom:env(safe-area-inset-bottom);
-  background:#fffdf9; border-top:1px solid var(--line);
+  background:var(--paper); border-top:1px solid var(--line);
+  box-shadow:0 -2px 10px rgb(var(--shadow-rgb)/.05);
   display:flex; z-index:50;
 }
 nav#tabbar button{
@@ -83,14 +82,15 @@ nav#tabbar button.on{color:var(--accent); font-weight:600;}
 nav#tabbar svg{width:22px; height:22px;}
 
 /* ===== 通用元件 ===== */
-.card{background:var(--card); border:1px solid var(--card-line); border-radius:var(--r-card); padding:16px; margin-bottom:14px;}
+.card{background:var(--card); border:1px solid var(--card-line); border-radius:var(--r-card);
+  padding:16px; margin-bottom:14px; box-shadow:var(--shadow-sm);}
 .btn{
   display:inline-block; border:1px solid var(--btn-line); background:#fff; color:var(--ink);
   border-radius:var(--r-btn); padding:10px 18px; font-size:15px; cursor:pointer; font-weight:500;
 }
 .btn.primary{background:var(--btn-primary); border-color:var(--btn-primary); color:#fff; font-weight:600;}
-.btn.danger{background:var(--brand-red); border-color:var(--brand-red); color:#fff;}
-.btn.ghost{border-color:transparent; color:var(--brand-red);}
+.btn.danger{background:var(--danger); border-color:var(--danger); color:#fff;}
+.btn.ghost{border-color:transparent; color:var(--danger);}
 .btn.small{padding:5px 12px; font-size:13px; border-radius:var(--r-btn);}
 .btn:active{opacity:.75;}
 .row{display:flex; gap:10px; align-items:center;}
@@ -100,7 +100,7 @@ nav#tabbar svg{width:22px; height:22px;}
   background:var(--accent-soft); color:var(--ink); margin:0 4px 4px 0; font-weight:500;
 }
 .chip.tag{background:#f5f5f5; color:var(--ink-soft);}
-.warmth-hot{background:var(--hot-bg); color:var(--brand-red);}
+.warmth-hot{background:var(--hot-bg); color:var(--hot);}
 .warmth-warm{background:var(--warm-bg); color:var(--ink);}
 .warmth-cold{background:var(--cold-bg); color:var(--ink-soft);}
 .muted{color:var(--ink-soft); font-size:13px;}
@@ -242,7 +242,7 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
 .bars .bcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px;}
 .bars .bwrap{flex:1 1 auto; width:100%; display:flex; align-items:flex-end;}
 .bars .bfill{width:100%; border-radius:5px 5px 2px 2px; background:var(--btn-primary);}
-.bars .bcol.now .bfill{background:var(--brand-red);}
+.bars .bcol.now .bfill{background:var(--accent);}
 .bars .bval, .bars .blab{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
 .rankrow{
   display:flex; align-items:flex-start; gap:9px;
@@ -263,8 +263,8 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
   <header>
     <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
       <circle cx="50" cy="50" r="37.50" fill="none" stroke="var(--ink)" stroke-width="2.4"/>
-      <polygon points="50.00,53.00 50.71,54.40 51.47,55.77 52.28,57.10 53.12,58.40 54.00,59.66 54.91,60.86 55.86,62.02 56.82,63.12 57.81,64.16 58.82,65.14 59.83,66.05 60.86,66.90 61.88,67.67 62.90,68.38 63.92,69.01 64.92,69.57 65.90,70.05 66.86,70.46 67.79,70.79 68.69,71.05 69.55,71.23 70.37,71.34 71.14,71.37 71.86,71.34 72.52,71.24 73.12,71.07 73.66,70.83 74.14,70.54 74.54,70.18 74.87,69.78 75.13,69.32 75.30,68.81 75.40,68.26 75.41,67.67 75.34,67.05 75.19,66.39 74.95,65.72 74.63,65.01 74.23,64.30 73.73,63.57 73.16,62.83 72.50,62.09 71.77,61.36 70.95,60.63 70.06,59.91 69.09,59.20 68.05,58.52 66.95,57.86 65.78,57.23 64.55,56.63 63.27,56.06 61.94,55.54 60.55,55.05 59.13,54.61 57.67,54.21 56.18,53.87 54.66,53.57 53.12,53.33 51.56,53.14 50.00,53.00" fill="var(--brand-red)"/>
-      <polygon points="50.00,53.00 48.44,53.14 46.88,53.33 45.34,53.57 43.82,53.87 42.33,54.21 40.87,54.61 39.45,55.05 38.06,55.54 36.73,56.06 35.45,56.63 34.22,57.23 33.05,57.86 31.95,58.52 30.91,59.20 29.94,59.91 29.05,60.63 28.23,61.36 27.50,62.09 26.84,62.83 26.27,63.57 25.77,64.30 25.37,65.01 25.05,65.72 24.81,66.39 24.66,67.05 24.59,67.67 24.60,68.26 24.70,68.81 24.87,69.32 25.13,69.78 25.46,70.18 25.86,70.54 26.34,70.83 26.88,71.07 27.48,71.24 28.14,71.34 28.86,71.37 29.63,71.34 30.45,71.23 31.31,71.05 32.21,70.79 33.14,70.46 34.10,70.05 35.08,69.57 36.08,69.01 37.10,68.38 38.12,67.67 39.14,66.90 40.17,66.05 41.18,65.14 42.19,64.16 43.18,63.12 44.14,62.02 45.09,60.86 46.00,59.66 46.88,58.40 47.72,57.10 48.53,55.77 49.29,54.40 50.00,53.00" fill="var(--brand-red)"/>
+      <polygon points="50.00,53.00 50.71,54.40 51.47,55.77 52.28,57.10 53.12,58.40 54.00,59.66 54.91,60.86 55.86,62.02 56.82,63.12 57.81,64.16 58.82,65.14 59.83,66.05 60.86,66.90 61.88,67.67 62.90,68.38 63.92,69.01 64.92,69.57 65.90,70.05 66.86,70.46 67.79,70.79 68.69,71.05 69.55,71.23 70.37,71.34 71.14,71.37 71.86,71.34 72.52,71.24 73.12,71.07 73.66,70.83 74.14,70.54 74.54,70.18 74.87,69.78 75.13,69.32 75.30,68.81 75.40,68.26 75.41,67.67 75.34,67.05 75.19,66.39 74.95,65.72 74.63,65.01 74.23,64.30 73.73,63.57 73.16,62.83 72.50,62.09 71.77,61.36 70.95,60.63 70.06,59.91 69.09,59.20 68.05,58.52 66.95,57.86 65.78,57.23 64.55,56.63 63.27,56.06 61.94,55.54 60.55,55.05 59.13,54.61 57.67,54.21 56.18,53.87 54.66,53.57 53.12,53.33 51.56,53.14 50.00,53.00" fill="var(--logo)"/>
+      <polygon points="50.00,53.00 48.44,53.14 46.88,53.33 45.34,53.57 43.82,53.87 42.33,54.21 40.87,54.61 39.45,55.05 38.06,55.54 36.73,56.06 35.45,56.63 34.22,57.23 33.05,57.86 31.95,58.52 30.91,59.20 29.94,59.91 29.05,60.63 28.23,61.36 27.50,62.09 26.84,62.83 26.27,63.57 25.77,64.30 25.37,65.01 25.05,65.72 24.81,66.39 24.66,67.05 24.59,67.67 24.60,68.26 24.70,68.81 24.87,69.32 25.13,69.78 25.46,70.18 25.86,70.54 26.34,70.83 26.88,71.07 27.48,71.24 28.14,71.34 28.86,71.37 29.63,71.34 30.45,71.23 31.31,71.05 32.21,70.79 33.14,70.46 34.10,70.05 35.08,69.57 36.08,69.01 37.10,68.38 38.12,67.67 39.14,66.90 40.17,66.05 41.18,65.14 42.19,64.16 43.18,63.12 44.14,62.02 45.09,60.86 46.00,59.66 46.88,58.40 47.72,57.10 48.53,55.77 49.29,54.40 50.00,53.00" fill="var(--logo)"/>
       <polyline points="50.00,53.00 50.70,51.74 51.35,50.46 51.95,49.17 52.51,47.86 53.01,46.55 53.46,45.24 53.85,43.93 54.19,42.63 54.47,41.34 54.70,40.08 54.88,38.84 54.99,37.63 55.06,36.45 55.07,35.31 55.03,34.22 54.94,33.17 54.81,32.18 54.63,31.24 54.40,30.36 54.14,29.55 53.83,28.80 53.50,28.12 53.13,27.52 52.73,26.99 52.32,26.54 51.88,26.17 51.42,25.88 50.95,25.67 50.48,25.54 50.00,25.50 49.52,25.54 49.05,25.67 48.58,25.88 48.12,26.17 47.68,26.54 47.27,26.99 46.87,27.52 46.50,28.12 46.17,28.80 45.86,29.55 45.60,30.36 45.37,31.24 45.19,32.18 45.06,33.17 44.97,34.22 44.93,35.31 44.94,36.45 45.01,37.63 45.12,38.84 45.30,40.08 45.53,41.34 45.81,42.63 46.15,43.93 46.54,45.24 46.99,46.55 47.49,47.86 48.05,49.17 48.65,50.46 49.30,51.74 50.00,53.00" fill="none" stroke="var(--ink)" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
       <circle cx="50.00" cy="25.50" r="1.6" fill="var(--ink)"/>
       <circle cx="50.00" cy="53.00" r="3.1" fill="var(--ink)"/>
@@ -331,11 +331,6 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
       </div>
       <div class="card">
         <div style="font-weight:700; margin-bottom:6px;">外觀</div>
-        <label>主題</label>
-        <select id="skin-select">
-          <option value="nuskin">極簡黑白（Nu Skin 風）</option>
-          <option value="paper">暖紙感（原版）</option>
-        </select>
         <label>熟度顏色（點色塊修改）</label>
         <div class="row" id="warmth-row"></div>
         <label>夥伴外框顏色（關係圖節點外環、名單與詳情的夥伴徽章）</label>
@@ -564,20 +559,37 @@ const ROLES = {
 function roleOf(c){ return ROLES[c && c.role] ? c.role : "customer"; }
 function isPartner(c){ return roleOf(c) !== "customer"; }
 
-const SKIN_WARMTH = {
-  nuskin: {hot:"#c81d1d", warm:"#252525", cold:"#c3c9cf"},
-  paper:  {hot:"#c2571a", warm:"#d99a2b", cold:"#7d8b99"},
-};
-function currentSkin(){ return (DB && DB.settings && DB.settings.skin) || "nuskin"; }
+const DEFAULT_WARMTH = {hot:"#c0561f", warm:"#4a4a4a", cold:"#b9c2c8"};
+const DEFAULT_PARTNER = "#00708f";
+/* 舊版本的預設色。裝置上存的值如果還等於這些，代表使用者沒自訂過，
+   換品牌配色時要跟著更新；真的自訂過的顏色保留不動 */
+const LEGACY_WARMTH = [
+  {hot:"#c81d1d", warm:"#252525", cold:"#c3c9cf"},
+  {hot:"#c2571a", warm:"#d99a2b", cold:"#7d8b99"},
+];
+const LEGACY_PARTNER = ["#1f6f8b"];
+function upgradeLegacyColors(){
+  const s = DB.settings || (DB.settings = {});
+  let changed = false;
+  if (s.skin){ delete s.skin; changed = true; }          // 只剩一套配色，不再需要
+  const w = s.warmthColors;
+  if (w){
+    ["hot", "warm", "cold"].forEach(k => {
+      if (LEGACY_WARMTH.some(L => L[k] === w[k])){ delete w[k]; changed = true; }
+    });
+    if (!Object.keys(w).length){ delete s.warmthColors; changed = true; }
+  }
+  if (LEGACY_PARTNER.includes(s.partnerColor)){ delete s.partnerColor; changed = true; }
+  if (changed) save();
+}
 function warmthColor(k){
   const c = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
-  return c || SKIN_WARMTH[currentSkin()][k];
+  return c || DEFAULT_WARMTH[k];
 }
 function partnerColor(){
-  return (DB && DB.settings && DB.settings.partnerColor) || "#1f6f8b";
+  return (DB && DB.settings && DB.settings.partnerColor) || DEFAULT_PARTNER;
 }
 function applySkin(){
-  document.body.classList.toggle("skin-paper", currentSkin() === "paper");
   ["hot", "warm", "cold"].forEach(k => {
     const custom = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
     if (custom) document.body.style.setProperty("--" + k, custom);
@@ -729,7 +741,6 @@ function migrate(d){
 
   const st = (d.settings && typeof d.settings === "object") ? d.settings : {};
   base.settings = {};
-  if (st.skin === "paper" || st.skin === "nuskin") base.settings.skin = st.skin;
   if (st.warmthColors && typeof st.warmthColors === "object"){
     const wc = {};
     ["hot", "warm", "cold"].forEach(k => { if (isColor(st.warmthColors[k])) wc[k] = st.warmthColors[k]; });
@@ -1147,7 +1158,7 @@ function renderSales(){
       const c = getCustomer(d.customerId), over = d.days < 0;
       return `<div class="rankrow" data-open="${esc(c.id)}" style="cursor:pointer;">
         <div class="rname">${esc(c.name)}<div class="rsub">${esc(d.item)}</div></div>
-        <div class="rval"${over ? ' style="color:var(--brand-red);"' : ""}>${
+        <div class="rval"${over ? ' style="color:var(--danger);"' : ""}>${
           over ? "逾期 " + (-d.days) + " 天" : d.days === 0 ? "就是今天" : d.days + " 天後"}</div>
       </div>`;
     }).join("")}
@@ -1325,7 +1336,7 @@ function renderHome(){
     rb.innerHTML = `<div class="card"><div class="card-title">最近往來</div>
       <div class="empty" style="border:0; background:none; padding:12px 0;">還沒有任何往來紀錄。<br>跟客戶聊完、成交或給體驗，隨手記一筆。</div></div>`;
   } else {
-    const TOUCH = {log:{label:"", color:""}, buy:{label:"購買", color:"var(--brand-red)"},
+    const TOUCH = {log:{label:"", color:""}, buy:{label:"購買", color:"var(--accent)"},
                    trial:{label:"體驗", color:"var(--partner)"}};
     rb.innerHTML = `<div class="card"><div class="card-title">最近往來</div>` + recent.map(i => {
       const c = getCustomer(i.customerId);
@@ -1625,8 +1636,8 @@ function openDetail(id){
   const trials = trialsOf(id);
   const spent = spentOf(id);
   const fields = [
-    ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--brand-red)">${esc(c.phone)}</a>` : ""],
-    ["LINE", c.lineId ? `<a href="https://line.me/ti/p/~${encodeURIComponent(c.lineId)}" target="_blank" rel="noopener" style="color:var(--brand-red)">${esc(c.lineId)}</a>` : ""],
+    ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--accent)">${esc(c.phone)}</a>` : ""],
+    ["LINE", c.lineId ? `<a href="https://line.me/ti/p/~${encodeURIComponent(c.lineId)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(c.lineId)}</a>` : ""],
     ["生日", c.birthday ? esc(c.birthday) + (birthdayInDays(c, 30) !== null ? `　<b>${birthdayInDays(c, 30) === 0 ? "就是今天" : birthdayInDays(c, 30) + " 天後"}</b>` : "") : ""],
     ["公司／職業", esc(c.company)],
     ["怎麼認識的", esc(c.source)],
@@ -1646,7 +1657,7 @@ function openDetail(id){
       return `<div class="card" style="margin-top:12px;">
         <div style="font-weight:700; margin-bottom:6px;">組織</div>
         <div class="muted">第 ${generationOf(id)} 代　直屬下線 ${downs.length} 人　整條線 ${sz} 人</div>
-        <div class="muted">上線：${upc ? `<span data-open="${esc(upc.id)}" style="color:var(--brand-red);cursor:pointer;">${esc(upc.name)}</span>` : "無（最上層）"}</div>
+        <div class="muted">上線：${upc ? `<span data-open="${esc(upc.id)}" style="color:var(--accent);cursor:pointer;">${esc(upc.name)}</span>` : "無（最上層）"}</div>
         ${os ? `<div class="muted">組織業績累計 ${money(os)}（本人 ${money(spentOf(id))}）</div>` : ""}
         ${downs.length ? `<div style="margin-top:6px;">${downs.map(d => {
           const dc = getCustomer(d);
@@ -2988,12 +2999,6 @@ function renderSettings(){
       `<input type="color" class="colorpick" id="wc-${k}" value="${warmthColor(k)}">`).join("") +
     `<span class="grow"></span><button class="btn small" id="wc-reset">恢復預設</button>`;
 
-  const skinSel = document.getElementById("skin-select");
-  skinSel.value = currentSkin();
-  skinSel.onchange = () => {
-    DB.settings.skin = skinSel.value;
-    save(); applySkin(); renderSettings();
-  };
   ["hot", "warm", "cold"].forEach(k => {
     const inp = document.getElementById("wc-" + k);
     inp.value = warmthColor(k);
@@ -3210,6 +3215,7 @@ function seedDemo(){
 }
 DB = loadDB();
 seedDemo();
+upgradeLegacyColors();
 applySkin();
 renderHeadStats();
 showView("home");
