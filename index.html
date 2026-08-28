@@ -675,7 +675,12 @@ function migrate(d){
     return ok;
   }).map(x => {
     const amt = num(x.amount), sv = num(x.sv), cy = num(x.cycle);
+    const q = num(x.qty), u = num(x.unit), su = num(x.svUnit);
     return {id:x.id, customerId:x.customerId, date:x.date, item:x.item,
+      orderId: safeId(x.orderId) ? x.orderId : null,
+      qty: (q !== null && q >= 1 && q <= 999) ? Math.round(q) : 1,
+      unit: (u !== null && u >= 0) ? u : null,
+      svUnit: (su !== null && su >= 0) ? su : null,
       amount: (amt !== null && amt >= 0) ? amt : null,
       sv: (sv !== null && sv >= 0) ? sv : null,
       cycle: (cy !== null && cy > 0 && cy <= 3650) ? Math.round(cy) : null,
@@ -1289,12 +1294,29 @@ function openDetail(id){
       }).join("") : "";
     })()}
 
-    <h2>購買紀錄（${buys.length}）${spent ? "　累計 " + money(spent) : ""}</h2>
-    <div>${buys.length ? buys.map(x =>
-      `<div class="ilog"><span class="when">${esc(x.date)}</span>
-       <button class="btn small ghost" data-delbuy="${esc(x.id)}" style="float:right;">刪</button>
-       <div class="txt"><b>${esc(x.item)}</b>${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${Number(x.sv) ? "　SV " + x.sv : ""}${x.note ? "\n" + esc(x.note) : ""}</div></div>`).join("")
-      : `<div class="muted">還沒有購買紀錄。</div>`}</div>
+    ${(() => {
+      // 同一張單（orderId）的多個品項歸在一起；舊資料沒有 orderId，各自成一單
+      const orders = [];
+      const byOrder = {};
+      buys.forEach(x => {
+        const k = x.orderId || ("_solo_" + x.id);
+        if (!byOrder[k]){ byOrder[k] = {key:k, date:x.date, note:x.note, items:[]}; orders.push(byOrder[k]); }
+        byOrder[k].items.push(x);
+      });
+      const orderHTML = o => {
+        const sum = o.items.reduce((t, x) => t + (Number(x.amount) || 0), 0);
+        const sumSv = o.items.reduce((t, x) => t + (Number(x.sv) || 0), 0);
+        const multi = o.items.length > 1;
+        return `<div class="ilog"><span class="when">${esc(o.date)}</span>
+          <button class="btn small ghost" data-delorder="${esc(o.key)}" style="float:right;">刪</button>
+          <div class="txt">${o.items.map(x =>
+            `<div><b>${esc(x.item)}</b>${(x.qty && x.qty > 1) ? ` ×${x.qty}` : ""}${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${Number(x.sv) ? "　SV " + Math.round(x.sv) : ""}</div>`).join("")}
+          ${multi ? `<div class="muted" style="margin-top:2px;">合計 ${money(sum)}${sumSv ? "・SV " + Math.round(sumSv) : ""}</div>` : ""}
+          ${o.note ? esc(o.note) : ""}</div></div>`;
+      };
+      return `<h2>購買紀錄（${orders.length} 單／${buys.length} 項）${spent ? "　累計 " + money(spent) : ""}</h2>
+        <div>${orders.length ? orders.map(orderHTML).join("") : `<div class="muted">還沒有購買紀錄。</div>`}</div>`;
+    })()}
 
     <h2>關係（${rels.length}）</h2>
     <div id="d-rels">${rels.length ? rels.map(r => {
@@ -1341,10 +1363,19 @@ function openDetail(id){
     DB.relations = DB.relations.filter(r => r.id !== b.dataset.delrel);
     save(); openDetail(id);
   }));
-  document.querySelectorAll("[data-delbuy]").forEach(b => b.addEventListener("click", e => {
+  document.querySelectorAll("[data-delorder]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
-    if (!confirm("刪除這筆購買紀錄？")) return;
-    DB.purchases = DB.purchases.filter(x => x.id !== b.dataset.delbuy);
+    const k = b.dataset.delorder;
+    const solo = k.startsWith("_solo_");
+    const targets = solo
+      ? DB.purchases.filter(x => x.id === k.slice(6))
+      : DB.purchases.filter(x => x.orderId === k && x.customerId === id);
+    if (!targets.length) return;
+    if (!confirm(targets.length > 1
+      ? `刪除這張單（共 ${targets.length} 個品項）？`
+      : "刪除這筆購買紀錄？")) return;
+    const ids = new Set(targets.map(x => x.id));
+    DB.purchases = DB.purchases.filter(x => !ids.has(x.id));
     save(); openDetail(id);
   }));
   document.querySelectorAll("[data-dellog]").forEach(b => b.addEventListener("click", e => {
@@ -1467,21 +1498,113 @@ function openQuickLog(customerId){
 function openPurchase(customerId){
   if (!DB.customers.length){ alert("還沒有任何客戶，先新增一位吧。"); return; }
   const c = customerId ? getCustomer(customerId) : null;
+  let lines = [];   // 一張單可以有多個品項，每個品項可以有數量
+
   openSheet("記一筆購買", `
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("buy-pick", null)}
     <label>日期</label><input type="date" id="buy-date" value="${todayStr()}">
-    <label>從商品目錄選（選了會自動帶入名稱、售價、SV）</label>
+
+    <label>從商品目錄選（點一下加入這張單）</label>
     <input type="search" id="buy-cat-q" placeholder="輸入關鍵字找商品…" autocomplete="off">
     <select id="buy-cat-pick" size="5" style="height:auto; margin-top:6px;"></select>
-    <label>買了什麼（必填）</label><input type="text" id="buy-item" placeholder="例：ageLOC 精華、儲蓄險三年期">
-    <label>金額（選填）</label><input type="text" id="buy-amount" inputmode="decimal" placeholder="只填數字，例 36000">
-    <label>SV 點數（選填）</label><input type="text" id="buy-sv" inputmode="decimal" placeholder="從目錄選會自動帶入">
+    <div class="row" style="margin-top:8px;">
+      <input type="text" id="buy-manual" class="grow" placeholder="或自己打品項名稱">
+      <button class="btn small" id="buy-add-manual" style="flex:0 0 auto;">加入</button>
+    </div>
+
+    <label>這張單的品項</label>
+    <div id="buy-lines"></div>
+
     <label>回購週期（選填，天數；消耗品填了會自動提醒）</label>
     <input type="text" id="buy-cycle" inputmode="numeric" placeholder="例：30（一個月用完）">
     <label>備註（選填）</label><textarea id="buy-note" rows="2" placeholder="例：分期付款、幫親戚一起買"></textarea>
     <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="buy-save">儲存</button></div>
   `);
   if (!c) wireCustomerPicker("buy-pick", null);
+
+  const linesBox = document.getElementById("buy-lines");
+  const renderLines = () => {
+    if (!lines.length){
+      linesBox.innerHTML = `<div class="muted">還沒有品項——從上面的目錄挑，或自己打名稱加入。</div>`;
+      return;
+    }
+    const total = lines.reduce((t, l) => t + (l.unit || 0) * l.qty, 0);
+    const totalSv = lines.reduce((t, l) => t + (l.svUnit || 0) * l.qty, 0);
+    linesBox.innerHTML = lines.map((l, i) => `
+      <div class="card" style="padding:10px; margin-bottom:8px;">
+        <div class="row" style="align-items:baseline;">
+          <b class="grow">${esc(l.item)}</b>
+          <button class="btn small ghost" data-rmline="${i}" style="flex:0 0 auto;">移除</button>
+        </div>
+        <div class="row" style="margin-top:8px; gap:6px;">
+          <button class="btn small" data-qty="${i}" data-delta="-1" style="flex:0 0 auto;">−</button>
+          <input type="text" inputmode="numeric" data-qtyin="${i}" value="${l.qty}"
+            style="width:3.2em; text-align:center; padding:6px 4px;">
+          <button class="btn small" data-qty="${i}" data-delta="1" style="flex:0 0 auto;">＋</button>
+          <span class="muted" style="flex:0 0 auto;">單價</span>
+          <input type="text" inputmode="decimal" data-unit="${i}" value="${l.unit == null ? "" : l.unit}"
+            placeholder="選填" style="width:5.5em; padding:6px 8px;">
+        </div>
+        <div class="muted line-sub" data-sub="${i}" style="margin-top:6px;">
+          ${l.unit == null ? "未填金額" : "小計 " + money(l.unit * l.qty)}${l.svUnit ? "・SV " + Math.round(l.svUnit * l.qty) : ""}
+        </div>
+      </div>`).join("") +
+      `<div class="row" style="margin-top:4px;"><b class="grow">合計</b>
+        <b id="buy-total">${money(total)}${totalSv ? "・SV " + Math.round(totalSv) : ""}</b></div>`;
+
+    linesBox.querySelectorAll("[data-rmline]").forEach(b => b.addEventListener("click", () => {
+      lines.splice(Number(b.dataset.rmline), 1); renderLines();
+    }));
+    linesBox.querySelectorAll("[data-qty]").forEach(b => b.addEventListener("click", () => {
+      const i = Number(b.dataset.qty);
+      lines[i].qty = Math.max(1, Math.min(999, lines[i].qty + Number(b.dataset.delta)));
+      renderLines();
+    }));
+    // 打字當下就更新小計與合計；只改文字不重繪整份，否則游標會跳掉
+    const refreshTotals = () => {
+      lines.forEach((l, i) => {
+        const el = linesBox.querySelector(`[data-sub="${i}"]`);
+        if (el) el.textContent = (l.unit == null ? "未填金額" : "小計 " + money(l.unit * l.qty)) +
+          (l.svUnit ? "・SV " + Math.round(l.svUnit * l.qty) : "");
+      });
+      const t = lines.reduce((a, l) => a + (l.unit || 0) * l.qty, 0);
+      const tv = lines.reduce((a, l) => a + (l.svUnit || 0) * l.qty, 0);
+      const el = linesBox.querySelector("#buy-total");
+      if (el) el.textContent = money(t) + (tv ? "・SV " + Math.round(tv) : "");
+    };
+    linesBox.querySelectorAll("[data-qtyin]").forEach(inp => {
+      const apply = () => {
+        const i = Number(inp.dataset.qtyin);
+        const v = parseInt(inp.value, 10);
+        lines[i].qty = (v > 0 && v <= 999) ? v : 1;
+        refreshTotals();
+      };
+      inp.addEventListener("input", apply);
+      // 不在 blur/change 時重繪：即時更新已寫好數字，重繪會把使用者正要點的另一個
+      // 輸入框整個換掉，導致第一下點擊被吃掉（手機上兩欄相鄰特別明顯）
+      inp.addEventListener("change", apply);
+    });
+    linesBox.querySelectorAll("[data-unit]").forEach(inp => {
+      const apply = () => {
+        const i = Number(inp.dataset.unit);
+        const raw = inp.value.replace(/[,\s$]/g, "");
+        const v = Number(raw);
+        lines[i].unit = (raw && Number.isFinite(v) && v >= 0) ? v : null;
+        refreshTotals();
+      };
+      inp.addEventListener("input", apply);
+      inp.addEventListener("change", apply);
+    });
+  };
+  renderLines();
+
+  const addLine = (item, unit, svUnit) => {
+    const exist = lines.find(l => l.item === item);
+    if (exist){ exist.qty = Math.min(999, exist.qty + 1); }   // 同品項再選一次就是加數量
+    else lines.push({item, qty:1, unit: unit == null ? null : unit, svUnit: svUnit || null});
+    renderLines();
+  };
+
   const cq = document.getElementById("buy-cat-q");
   const cpick = document.getElementById("buy-cat-pick");
   const fillCatalog = () => {
@@ -1495,24 +1618,35 @@ function openPurchase(customerId){
   cq.addEventListener("input", fillCatalog);
   cpick.addEventListener("change", () => {
     const hit = CATALOG.find(x => x[0] === cpick.value);
-    if (!hit) return;
-    document.getElementById("buy-item").value = hit[0];
-    if (hit[1]) document.getElementById("buy-amount").value = hit[1];
-    if (hit[2]) document.getElementById("buy-sv").value = hit[2];
+    if (hit) addLine(hit[0], hit[1] || null, hit[2] || null);
   });
+  const addManual = () => {
+    const el = document.getElementById("buy-manual");
+    const v = el.value.trim();
+    if (!v) return;
+    addLine(v, null, null);
+    el.value = "";
+  };
+  document.getElementById("buy-add-manual").addEventListener("click", addManual);
+  document.getElementById("buy-manual").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); addManual(); } });
+
   document.getElementById("buy-save").addEventListener("click", () => {
     const target = c ? c.id : (document.getElementById("buy-pick") || {}).value;
     if (!target){ alert("請先選一位對象。"); return; }
-    const item = document.getElementById("buy-item").value.trim();
-    if (!item){ alert("請填買了什麼。"); return; }
-    const raw = document.getElementById("buy-amount").value.replace(/[,\s$]/g, "");
-    if (raw && isNaN(Number(raw))){ alert("金額請只填數字。"); return; }
-    DB.purchases.push({id:uid("p"), customerId:target,
-      date:document.getElementById("buy-date").value || todayStr(),
-      item, amount: raw ? Number(raw) : null,
-      sv: (() => { const v = parseFloat(document.getElementById("buy-sv").value); return (v > 0) ? v : null; })(),
-      cycle: (() => { const v = parseInt(document.getElementById("buy-cycle").value, 10); return (v > 0 && v <= 3650) ? v : null; })(),
-      note: document.getElementById("buy-note").value.trim(), createdAt:Date.now()});
+    if (!lines.length){ alert("這張單還沒有任何品項。"); return; }
+    const date = document.getElementById("buy-date").value || todayStr();
+    const cycle = (() => { const v = parseInt(document.getElementById("buy-cycle").value, 10); return (v > 0 && v <= 3650) ? v : null; })();
+    const note = document.getElementById("buy-note").value.trim();
+    const orderId = uid("o");
+    lines.forEach(l => {
+      DB.purchases.push({id:uid("p"), customerId:target, date, orderId,
+        item:l.item, qty:l.qty,
+        unit: l.unit == null ? null : l.unit,
+        amount: l.unit == null ? null : l.unit * l.qty,
+        svUnit: l.svUnit == null ? null : l.svUnit,
+        sv: l.svUnit == null ? null : l.svUnit * l.qty,
+        cycle, note, createdAt:Date.now()});
+    });
     save(); closeSheet();
     if (c) openDetail(c.id); else showView(currentView);
   });
