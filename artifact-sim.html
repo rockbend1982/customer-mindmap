@@ -931,7 +931,8 @@ function salesRows(){
 }
 function shortMoney(n){
   n = Math.round(Number(n) || 0);
-  if (n >= 10000) return (n / 10000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "") + " 萬";
+  // 百萬以下保留一位小數，否則各項加起來會跟總額差一截（20.5＋2 看起來才等於 22.5）
+  if (n >= 10000) return (n / 10000).toFixed(n >= 1000000 ? 0 : 1).replace(/\.0$/, "") + " 萬";
   return n.toLocaleString("en-US");
 }
 function orderCount(rows){
@@ -958,6 +959,21 @@ function salesMonths(){
   }
   return out;
 }
+/* 夥伴（含「夥伴＋自用」）跟自己進的貨算組織那塊，不算零售業績 */
+function fromPartner(id){
+  const c = getCustomer(id);
+  return !!(c && isPartner(c));
+}
+/* 直屬夥伴＝身份是夥伴、且沒有上線的人（組織圖裡直接掛在「我」底下那一層） */
+function directPartners(){
+  return DB.customers.filter(c => isPartner(c) && !uplineOf(c.id));
+}
+/* 一條線的消費＝這位夥伴自己＋他底下所有下線，範圍限定在傳進來的那批紀錄 */
+function lineSpend(id, rows){
+  const ids = new Set([id].concat(orgMembers(id)));
+  return rows.filter(x => ids.has(x.customerId)).reduce((t, x) => t + (Number(x.amount) || 0), 0);
+}
+
 /* 每個「人＋品項」只看最新一筆，否則重買後舊紀錄會因為逾期越久越搶前面 */
 function repurchaseList(){
   const latest = {};
@@ -982,14 +998,16 @@ function renderSales(){
     box.innerHTML = `<div class="empty">還沒有購買紀錄。<br>在首頁按「記購買」記一筆，這裡就會出現業績分析。</div>`;
     return;
   }
+  const hasPartner = DB.customers.some(isPartner);
   const rows = salesRows();
-  const sum = rows.reduce((t, x) => t + (Number(x.amount) || 0), 0);
-  const sv = rows.reduce((t, x) => t + (Number(x.sv) || 0), 0);
-  const orders = orderCount(rows);
+  const retail = rows.filter(x => !fromPartner(x.customerId));
+  const sum = retail.reduce((t, x) => t + (Number(x.amount) || 0), 0);
+  const sv = retail.reduce((t, x) => t + (Number(x.sv) || 0), 0);
+  const orders = orderCount(retail);
   const rangeLabel = (SALES_RANGES.find(r => r[0] === gSalesRange) || ["", ""])[1];
 
   const kpi = `<div class="card">
-    <div class="cardtitle">${esc(rangeLabel)}業績</div>
+    <div class="cardtitle">${esc(rangeLabel)}零售業績${hasPartner ? ` <span class="muted">只算自用客戶</span>` : ""}</div>
     <div class="kpi">
       <div><b>${shortMoney(sum)}</b><span>營業額</span></div>
       <div><b>${orders}</b><span>張單</span></div>
@@ -998,17 +1016,18 @@ function renderSales(){
     </div>
   </div>`;
 
+  const allRetail = all.filter(x => !fromPartner(x.customerId));
   const keys = salesMonths();
   const mSum = {};
   keys.forEach(k => mSum[k] = 0);
-  all.forEach(x => { const k = x.date.slice(0, 7); if (k in mSum) mSum[k] += Number(x.amount) || 0; });
+  allRetail.forEach(x => { const k = x.date.slice(0, 7); if (k in mSum) mSum[k] += Number(x.amount) || 0; });
   const peak = Math.max(1, ...keys.map(k => mSum[k]));
   const thisKey = todayStr().slice(0, 7);
   const lastKey = keys.length > 1 ? keys[keys.length - 2] : null;
   const showVal = keys.length <= 8;
   const diff = lastKey ? mSum[thisKey] - mSum[lastKey] : 0;
   const trend = `<div class="card">
-    <div class="cardtitle">月營業額</div>
+    <div class="cardtitle">月營業額${hasPartner ? ` <span class="muted">零售</span>` : ""}</div>
     <div class="bars">${keys.map(k => `<div class="bcol ${k === thisKey ? "now" : ""}">
         ${showVal ? `<div class="bval">${mSum[k] ? shortMoney(mSum[k]) : ""}</div>` : ""}
         <div class="bwrap"><div class="bfill" style="height:${mSum[k] ? Math.max(3, Math.round(mSum[k] / peak * 100)) : 1}%"></div></div>
@@ -1018,6 +1037,7 @@ function renderSales(){
       (mSum[thisKey] || mSum[lastKey]) ? `（${diff >= 0 ? "多" : "少"} ${money(Math.abs(diff)).replace("NT$ ", "")}）` : ""}</div>` : ""}
   </div>`;
 
+  // 產品排行看的是貨品流動，含夥伴進貨才是全貌，所以這塊不套零售口徑
   const byItem = {};
   rows.forEach(x => {
     const k = String(x.item || "");
@@ -1029,7 +1049,7 @@ function renderSales(){
   const items = Object.values(byItem).sort((a, b) => b.amount - a.amount || b.qty - a.qty);
   const topAmt = Math.max(1, items.length ? items[0].amount : 1);
   const prod = items.length ? `<div class="card">
-    <div class="cardtitle">產品排行 <span class="muted">共 ${items.length} 項・點開看誰買的</span></div>
+    <div class="cardtitle">產品排行 <span class="muted">共 ${items.length} 項${hasPartner ? "・含夥伴進貨" : ""}・點開看誰買的</span></div>
     ${items.slice(0, 10).map((o, i) => `<div class="rankrow" data-sitem="${esc(o.item)}" style="cursor:pointer;">
       <div class="rno">${i + 1}</div>
       <div class="rname">${esc(o.item)}
@@ -1042,7 +1062,7 @@ function renderSales(){
   </div>` : "";
 
   const byCust = {};
-  rows.forEach(x => byCust[x.customerId] = (byCust[x.customerId] || 0) + (Number(x.amount) || 0));
+  retail.forEach(x => byCust[x.customerId] = (byCust[x.customerId] || 0) + (Number(x.amount) || 0));
   const custs = Object.entries(byCust).map(([id, v]) => ({c: getCustomer(id), v}))
     .filter(x => x.c).sort((a, b) => b.v - a.v);
   const topCust = Math.max(1, custs.length ? custs[0].v : 1);
@@ -1056,7 +1076,7 @@ function renderSales(){
     ? `<div class="muted" style="margin-top:10px;">這段期間 <b>${custs.length}</b> 位客戶下單，其中 <b>${newCnt}</b> 位是第一次買（貢獻 ${money(newSum)}，佔 ${sum ? Math.round(newSum / sum * 100) : 0}%）</div>`
     : "";
   const custCard = custs.length ? `<div class="card">
-    <div class="cardtitle">客戶排行</div>
+    <div class="cardtitle">客戶排行${hasPartner ? ` <span class="muted">自用客戶</span>` : ""}</div>
     ${custs.slice(0, 5).map((x, i) => `<div class="rankrow" data-open="${esc(x.c.id)}" style="cursor:pointer;">
       <div class="rno">${i + 1}</div>
       <div class="rname">${esc(x.c.name)}
@@ -1064,6 +1084,33 @@ function renderSales(){
       </div>
       <div class="rval">${shortMoney(x.v)}</div>
     </div>`).join("")}${newLine}
+  </div>` : "";
+
+  // 組織的總量要用「線上所有人」算，不能只算夥伴身份的人，
+  // 否則頂上的總額會跟底下各線加起來對不上
+  const dps = directPartners();
+  const lineIds = new Set();
+  dps.forEach(c => { lineIds.add(c.id); orgMembers(c.id).forEach(x => lineIds.add(x)); });
+  const orgRows = rows.filter(x => lineIds.has(x.customerId));
+  const lines = dps.map(c => ({c, v: lineSpend(c.id, rows), n: orgSize(c.id)}))
+    .sort((a, b) => b.v - a.v);
+  const topLine = Math.max(1, lines.length ? lines[0].v : 1);
+  const orgCard = hasPartner ? `<div class="card">
+    <div class="cardtitle">組織業績 <span class="muted">你這條線跟你進的貨</span></div>
+    <div class="kpi" style="margin-bottom:${lines.length ? "12px" : "0"};">
+      <div><b>${shortMoney(orgRows.reduce((t, x) => t + (Number(x.amount) || 0), 0))}</b><span>組織消費</span></div>
+      <div><b>${orderCount(orgRows)}</b><span>張單</span></div>
+      <div><b>${new Set(orgRows.map(x => x.customerId)).size}</b><span>人下單</span></div>
+    </div>
+    ${lines.map((x, i) => `<div class="rankrow" data-open="${esc(x.c.id)}" style="cursor:pointer;">
+      <div class="rno">${i + 1}</div>
+      <div class="rname">${esc(x.c.name)}
+        <div class="rankbar"><i style="width:${Math.max(2, Math.round(x.v / topLine * 100))}%"></i></div>
+        <div class="rsub">${x.n ? "線上 " + x.n + " 人" : "底下還沒有下線"}</div>
+      </div>
+      <div class="rval">${shortMoney(x.v)}</div>
+    </div>`).join("")}
+    ${lines.length ? `<div class="muted" style="margin-top:10px;">每條線＝這位夥伴自己＋他底下所有下線。線上如果有自用客戶，那筆同時也算進上面的零售業績</div>` : ""}
   </div>` : "";
 
   const due = repurchaseList();
@@ -1080,7 +1127,7 @@ function renderSales(){
     ${due.length > 8 ? `<div class="muted" style="margin-top:10px;">…共 ${due.length} 筆</div>` : ""}
   </div>` : "";
 
-  box.innerHTML = kpi + trend + prod + custCard + dueCard;
+  box.innerHTML = kpi + trend + prod + custCard + orgCard + dueCard;
 }
 
 function openSalesItem(item){
