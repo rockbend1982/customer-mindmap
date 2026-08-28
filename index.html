@@ -321,6 +321,10 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
         <input type="number" id="dormant-days" min="1" max="365" inputmode="numeric">
       </div>
       <div class="card">
+        <div class="card-title">商品目錄</div>
+        <div class="muted" id="catalog-info"></div>
+      </div>
+      <div class="card">
         <div style="font-weight:700; margin-bottom:6px;">資料統計</div>
         <div class="muted" id="stats-body"></div>
       </div>
@@ -379,6 +383,148 @@ const WARMTH = {
   warm: {label:"溫"},
   cold: {label:"冷"},
 };
+/* Nu Skin 台灣公開售價快照（抓取日 2026-08-28，僅供輸入輔助；
+   實際價格以官網為準，促銷價會變動）。格式：[名稱, 售價, SV, 分類] */
+const CATALOG = [
+["優式倍® 軟膠囊", 6115, 110, "代謝調理"],
+["優式倍® 軟膠囊家庭套裝", 27395, 500, "代謝調理"],
+["如新華茂精選魚油", 1195, 26, "代謝調理"],
+["深海賦活魚油", 2440, 52, "代謝調理"],
+["Appeal®綜合營養飲品(麥芽香草口味)", 2025, 37, "保健飲品"],
+["G3 活能飲品(隨身袋)", 2600, 55, "保健飲品"],
+["G3 活能飲品(隨身袋)二入組", 4900, 100, "保健飲品"],
+["Splash®C蘆薈活力飲品", 1705, 34, "保健飲品"],
+["ageLOC® TRME先食茶", 3450, 75, "保健飲品"],
+["ageLOC® TRME先食茶三入組", 8280, 175, "保健飲品"],
+["ageLOC®TRME FUN鬆飲", 2650, 55, "保健飲品"],
+["水光膠原胜肽六入組", 12530, 250, "保健飲品"],
+["蔓越莓菁妍組合", 4400, 94, "保健飲品"],
+["3A 無瑕新生精華", 2350, 47, "個人保養品"],
+["LumiSpa® 平衡淨膚露(適用中性及混和性肌膚)", 910, 20, "個人保養品"],
+["LumiSpa® 水感淨膚霜(適用乾燥肌膚)", 910, 20, "個人保養品"],
+["Nu Colour® 濾鏡透膚BB粉底液 SPF 35 PA++ 1.1象牙白色", 1135, 23, "個人保養品"],
+["[套裝含短效品] 人氣鎂光250分套裝", 12075, 250, "個人保養品"],
+["[惜福好物] 3A 無瑕肌套裝", 6770, 135, "個人保養品"],
+["ageLOC® Nutriol® 賦活精萃豐盈洗髮乳", 1140, 23, "個人保養品"],
+["ageLOC®緊緻凝膠", 1680, 34, "個人保養品"],
+["如絲洗髮乳(清爽型)家庭號", 1550, 31, "個人保養品"],
+["如絲洗髮乳(滋潤型) 家庭號", 1550, 31, "個人保養品"],
+["活顏深層抗皺精華", 1780, 35, "個人保養品"],
+["活顏醒膚前導液", 1750, 35, "個人保養品"],
+["美膚調皿組(調皿及調匙)", 100, 0, "個人保養品"],
+["薈萃善秀 一淨到底潔顏乳霜", 720, 15, "個人保養品"],
+["薈萃善秀 一淨到底潔顏凝膠", 720, 15, "個人保養品"],
+["薈萃善秀 維他命C+膠原淨白調理精華", 1270, 26, "個人保養品"],
+["CoQ10 彈力靚膚露", 1590, 32, "化妝水"],
+["NaPCA 滋潤噴霧液", 510, 10, "化妝水"],
+["活顏醒膚前導液 3入組", 5050, 100, "化妝水"],
+["薈萃善秀 肌本法則平衡水", 570, 11, "化妝水"],
+["180° 活力C潔面乳", 800, 17, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (平衡)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (平衡)(玫瑰金)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (抗痘)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (控油)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (控油)(玫瑰金)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (水感)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (水感)(玫瑰金)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® iO智慧基礎套裝 (輕柔)", 7450, 145, "卸妝/洗臉"],
+["LumiSpa® 控油淨膚露(適用油性肌膚)", 910, 20, "卸妝/洗臉"],
+["LumiSpa® 輕柔淨膚露(適用柔嫩肌膚)", 910, 20, "卸妝/洗臉"],
+["LumiSpa®抗痘淨膚露(適用痘痘肌膚)", 910, 20, "卸妝/洗臉"],
+["AP 24® 潔白牙膏18入組", 5940, 125, "口腔保健"],
+["AP 24®潔白牙膏", 390, 8, "口腔保健"],
+["菁英如沛青春配方", 3405, 72, "基礎營養"],
+["Nu Colour® 胜肽水潤護唇膏", 520, 10, "底妝/彩妝"],
+["ageLOC® R²", 5330, 113, "強健保護"],
+["元氣滿格組", 11800, 250, "強健保護"],
+["動能食物膠囊", 1065, 23, "強健保護"],
+["固格配方", 2250, 48, "強健保護"],
+["如新華茂冬蟲夏草菌絲體精沛膠囊", 1905, 41, "強健保護"],
+["明采配方", 1770, 38, "強健保護"],
+["綠茶菁萃膠囊(120顆)", 3385, 72, "強健保護"],
+["綠茶菁萃膠囊(120顆)三件組", 10155, 216, "強健保護"],
+["綠茶菁萃膠囊(30顆)", 1115, 24, "強健保護"],
+["舒眠膠囊三入組", 6180, 130, "強健保護"],
+["輔酵素Q10", 2010, 43, "強健保護"],
+["NaPCA滋潤面霜", 950, 19, "日/夜乳霜"],
+["活顏潤白防護霜 SPF22", 1550, 31, "日/夜乳霜"],
+["活顏緊緻倍彈霜", 2100, 42, "日/夜乳霜"],
+["活顏緊緻倍彈霜(補充罐)", 1890, 38, "日/夜乳霜"],
+["活顏緊緻倍彈霜1+1補充罐套裝", 3750, 75, "日/夜乳霜"],
+["活顏鎖水修護霜", 2100, 42, "日/夜乳霜"],
+["活顏鎖水修護霜(補充罐)", 1890, 38, "日/夜乳霜"],
+["活顏鎖水修護霜1+1補充罐套裝", 3750, 75, "日/夜乳霜"],
+["薈萃善秀 解除肌渴保濕乳霜", 1680, 34, "日/夜乳霜"],
+["薈萃善秀 解除肌渴極致乳霜", 1680, 34, "日/夜乳霜"],
+["薈萃善秀 解除肌渴水凝霜", 1680, 34, "日/夜乳霜"],
+["薈萃善秀 防光肌密日間防護乳(清爽型) SPF 35 PA+++", 1125, 23, "日/夜乳霜"],
+["薈萃善秀 防光肌密日間防護乳(潤澤型) SPF 35 PA+++", 1185, 24, "日/夜乳霜"],
+["昇源飲品", 1680, 36, "消化系統"],
+["昇源飲品組合", 6365, 135, "消化系統"],
+["輕舒暢沖泡飲", 2300, 42, "消化系統"],
+["輕舒暢沖泡飲雙入組", 4140, 75, "消化系統"],
+["ageLOC R² 家庭套裝", 26650, 580, "營養補充品"],
+["ageLOC® META每代紫+", 4085, 88, "營養補充品"],
+["ageLOC® META每代紫+三入組", 11340, 250, "營養補充品"],
+["ageLOC® TRME 30天套裝 (香草口味)", 15500, 330, "營養補充品"],
+["仕女如沛青春配方", 2870, 61, "營養補充品"],
+["兒童如沛甜嚼錠", 1185, 25, "營養補充品"],
+["如新華茂益生菌配方", 1840, 37, "營養補充品"],
+["如新華茂紅麴清醇膠囊", 2250, 48, "營養補充品"],
+["如新華茂超級靈芝", 3060, 65, "營養補充品"],
+["如沛青春配方", 2450, 52, "營養補充品"],
+["水光膠原胜肽", 2465, 53, "營養補充品"],
+["水光膠原胜肽 三入組", 6265, 125, "營養補充品"],
+["綠纖紫好燃組", 21800, 500, "營養補充品"],
+["舒眠膠囊", 2100, 45, "營養補充品"],
+["蔓越莓菁妍配方", 1590, 34, "營養補充品"],
+["頂級如沛", 5895, 125, "營養補充品"],
+["LumiSpa ® iO睛緻修護新動基礎套裝", 3640, 66, "眼周保養"],
+["LumiSpa ® iO睛緻修護新動基礎套裝 (玫瑰金)", 3640, 66, "眼周保養"],
+["LumiSpa ® iO睛緻修護新動組", 2590, 52, "眼周保養"],
+["LumiSpa® iO睛緻修護新動組(玫瑰金)", 2590, 52, "眼周保養"],
+["ageLOC® LumiSpa® iO睛緻修護矽膠導頭雙入組", 580, 12, "眼周保養"],
+["ageLOC®LumiSpa® iO睛緻修護矽膠導頭雙入組(玫瑰金)", 580, 12, "眼周保養"],
+["ageLOC®LumiSpa®睛緻修護新動眼霜", 1670, 34, "眼周保養"],
+["薈萃善秀 愛不釋眼光采眼霜", 1435, 29, "眼周保養"],
+["3A 無瑕新生精華(補充瓶)", 2020, 40, "臉部精華"],
+["3A 無瑕肌 1+2 補充瓶套裝", 6000, 125, "臉部精華"],
+["LumiSpa® 淨痘無瑕精華", 1480, 30, "臉部精華"],
+["[惜福好物] ageLOC® Brighter 鎂光精華", 1715, 35, "臉部精華"],
+["活顏倍彈源液 2入組", 9100, 185, "臉部精華"],
+["活顏倍彈源液(補充包)(60顆)", 4175, 83, "臉部精華"],
+["活顏倍彈源液1+1補充包套裝", 8390, 170, "臉部精華"],
+["活顏頂級逆齡精華", 4425, 88, "臉部精華"],
+["活顏頂級逆齡精華 2入組", 8500, 170, "臉部精華"],
+["活顏頂級逆齡精華1+1補充瓶套裝", 7900, 160, "臉部精華"],
+["薈萃善秀 肌本法則修護精華", 1985, 40, "臉部精華"],
+["蘆薈潤膚膠", 685, 14, "臉部精華"],
+["[套裝含短效品] 晚安香氛組", 1550, 31, "身體保養"],
+["ageLOC® 緊膚乳", 1680, 34, "身體保養"],
+["ageLOC® 美體緊緻精華", 1510, 30, "身體保養"],
+["ageLOC®美體甦活平衡膠", 1510, 30, "身體保養"],
+["冰河泥活膚霸(單塊裝)", 510, 10, "身體保養"],
+["水潤滋養身體乳", 970, 20, "身體保養"],
+["潔膚霸(五塊裝)", 2185, 44, "身體保養"],
+["潔膚霸(單塊裝)", 510, 10, "身體保養"],
+["潔膚霸沐浴乳", 1010, 20, "身體保養"],
+["潤手露", 465, 9, "身體保養"],
+["美體甦活平衡膠三入組", 4395, 89, "身體保養"],
+["美體緊緻精華三入組", 4395, 89, "身體保養"],
+["舒活潤膚乳", 960, 19, "身體保養"],
+["賦活潔膚露", 630, 13, "身體保養"],
+["身體滋養霜", 990, 20, "身體保養"],
+["曬麗勻礦物防曬乳SPF50+PA++++", 1000, 20, "防曬隔離"],
+["ageLOC® Nutriol® 賦活精萃豐盈護髮素", 1140, 23, "頭髮保養"],
+["ageLOC® Nutriol®賦活精萃豐盈滋養液", 1830, 37, "頭髮保養"],
+["亮采修護髮膜", 765, 15, "頭髮保養"],
+["如絲潤髮乳(清爽型)家庭號", 1550, 31, "頭髮保養"],
+["如絲潤髮乳(滋潤型)家庭號", 1550, 31, "頭髮保養"],
+["艾蒲精植洗髮乳家庭號(750ml)", 1330, 27, "頭髮保養"],
+["艾蒲精植護髮素家庭號(750ml)", 1415, 29, "頭髮保養"]
+];
+const CATALOG_DATE = "2026-08-28";
+
 const ROLES = {
   customer: {label:"顧客"},
   partner:  {label:"夥伴"},
@@ -804,8 +950,11 @@ function renderHomeInsights(){
     .reduce((t, x) => t + (Number(x.amount) || 0), 0);
   const cntOf = key => DB.purchases.filter(x => x.date.slice(0, 7) === key).length;
   const thisSum = sumOf(ym), lastSum = sumOf(lastYm);
+  const svOf = key => DB.purchases.filter(x => x.date.slice(0, 7) === key)
+    .reduce((t, x) => t + (Number(x.sv) || 0), 0);
+  const thisSv = svOf(ym);
   const monthRow = (thisSum || lastSum || cntOf(ym))
-    ? line("本月業績", `<b>${money(thisSum)}</b>　<span class="muted">${cntOf(ym)} 筆</span>` +
+    ? line("本月業績", `<b>${money(thisSum)}</b>　<span class="muted">${cntOf(ym)} 筆${thisSv ? "・SV " + Math.round(thisSv) : ""}</span>` +
         (lastSum ? `　<span class="muted">上月 ${money(lastSum)}（${thisSum >= lastSum ? "+" : "−"}${money(Math.abs(thisSum - lastSum)).replace("NT$ ", "")}）</span>` : ""))
     : "";
 
@@ -966,7 +1115,7 @@ function openDetail(id){
     <div>${buys.length ? buys.map(x =>
       `<div class="ilog"><span class="when">${esc(x.date)}</span>
        <button class="btn small ghost" data-delbuy="${esc(x.id)}" style="float:right;">刪</button>
-       <div class="txt"><b>${esc(x.item)}</b>${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${x.note ? "\n" + esc(x.note) : ""}</div></div>`).join("")
+       <div class="txt"><b>${esc(x.item)}</b>${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${Number(x.sv) ? "　SV " + x.sv : ""}${x.note ? "\n" + esc(x.note) : ""}</div></div>`).join("")
       : `<div class="muted">還沒有購買紀錄。</div>`}</div>
 
     <h2>關係（${rels.length}）</h2>
@@ -1143,14 +1292,36 @@ function openPurchase(customerId){
   openSheet("記一筆購買", `
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("buy-pick", null)}
     <label>日期</label><input type="date" id="buy-date" value="${todayStr()}">
-    <label>買了什麼（必填）</label><input type="text" id="buy-item" placeholder="例：儲蓄險三年期、保養組合">
+    <label>從商品目錄選（選了會自動帶入名稱、售價、SV）</label>
+    <input type="search" id="buy-cat-q" placeholder="輸入關鍵字找商品…" autocomplete="off">
+    <select id="buy-cat-pick" size="5" style="height:auto; margin-top:6px;"></select>
+    <label>買了什麼（必填）</label><input type="text" id="buy-item" placeholder="例：ageLOC 精華、儲蓄險三年期">
     <label>金額（選填）</label><input type="text" id="buy-amount" inputmode="decimal" placeholder="只填數字，例 36000">
+    <label>SV 點數（選填）</label><input type="text" id="buy-sv" inputmode="decimal" placeholder="從目錄選會自動帶入">
     <label>回購週期（選填，天數；消耗品填了會自動提醒）</label>
     <input type="text" id="buy-cycle" inputmode="numeric" placeholder="例：30（一個月用完）">
     <label>備註（選填）</label><textarea id="buy-note" rows="2" placeholder="例：分期付款、幫親戚一起買"></textarea>
     <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="buy-save">儲存</button></div>
   `);
   if (!c) wireCustomerPicker("buy-pick", null);
+  const cq = document.getElementById("buy-cat-q");
+  const cpick = document.getElementById("buy-cat-pick");
+  const fillCatalog = () => {
+    const kw = cq.value.trim().toLowerCase();
+    const hits = (kw ? CATALOG.filter(x => (x[0] + " " + x[3]).toLowerCase().includes(kw)) : CATALOG).slice(0, 40);
+    // 搜尋同時比對分類，所以選項也要標出分類，否則使用者看不出這筆為何入選
+    cpick.innerHTML = hits.map(x =>
+      `<option value="${esc(x[0])}">${esc(x[0])}${x[1] ? "　" + money(x[1]).replace("NT$ ", "$") : ""}${x[2] ? "・SV " + x[2] : ""}${x[3] ? "・" + esc(x[3]) : ""}</option>`).join("");
+  };
+  fillCatalog();
+  cq.addEventListener("input", fillCatalog);
+  cpick.addEventListener("change", () => {
+    const hit = CATALOG.find(x => x[0] === cpick.value);
+    if (!hit) return;
+    document.getElementById("buy-item").value = hit[0];
+    if (hit[1]) document.getElementById("buy-amount").value = hit[1];
+    if (hit[2]) document.getElementById("buy-sv").value = hit[2];
+  });
   document.getElementById("buy-save").addEventListener("click", () => {
     const target = c ? c.id : (document.getElementById("buy-pick") || {}).value;
     if (!target){ alert("請先選一位對象。"); return; }
@@ -1161,6 +1332,7 @@ function openPurchase(customerId){
     DB.purchases.push({id:uid("p"), customerId:target,
       date:document.getElementById("buy-date").value || todayStr(),
       item, amount: raw ? Number(raw) : null,
+      sv: (() => { const v = parseFloat(document.getElementById("buy-sv").value); return (v > 0) ? v : null; })(),
       cycle: (() => { const v = parseInt(document.getElementById("buy-cycle").value, 10); return (v > 0 && v <= 3650) ? v : null; })(),
       note: document.getElementById("buy-note").value.trim(), createdAt:Date.now()});
     save(); closeSheet();
@@ -1951,6 +2123,10 @@ function renderSettings(){
     delete DB.settings.warmthLabels;
     save(); applySkin(); renderSettings();
   };
+  document.getElementById("catalog-info").innerHTML =
+    `內建 ${CATALOG.length} 項 Nu Skin 台灣公開售價（抓取日 ${CATALOG_DATE}），記購買時可直接選、自動帶入售價與 SV。` +
+    `<br>這是抓取當下的快照，促銷價會變動，實際金額請以官網或訂單為準；金額與 SV 都可以手動改。`;
+
   const pcInp = document.getElementById("pc-color");
   pcInp.value = partnerColor();
   pcInp.onchange = () => {
