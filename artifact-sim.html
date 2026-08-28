@@ -519,9 +519,9 @@ const CATALOG = [
 const CATALOG_DATE = "2026-08-28";
 
 const ROLES = {
-  customer: {label:"顧客"},
+  customer: {label:"自用客戶"},
   partner:  {label:"夥伴"},
-  both:     {label:"夥伴＋顧客"},
+  both:     {label:"夥伴＋自用"},
 };
 function roleOf(c){ return ROLES[c && c.role] ? c.role : "customer"; }
 function isPartner(c){ return roleOf(c) !== "customer"; }
@@ -1219,7 +1219,7 @@ let listTag = "all";
 function renderList(){
   const wf = document.getElementById("list-warmth-filter");
   const groups = [
-    [["all","全部"],["_partner","夥伴"],["_customer","純顧客"]],
+    [["all","全部"],["_partner","夥伴"],["_customer","自用客戶"]],
     [["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")]],
     [["_buy","有成交"],["_nobuy","未成交"]],
   ];
@@ -2270,7 +2270,10 @@ function renderGraph(){
   const R = 27;
   const defs = `<defs>
     ${DB.relationTypes.map(t => `<marker id="arrow-${esc(t.key)}" viewBox="0 0 10 10" refX="9" refY="5"
-      markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="${t.color}"/></marker>
+      <marker id="arrows-${esc(t.key)}" viewBox="0 0 10 10" refX="9" refY="5"
+      markerWidth="3" markerHeight="3" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="${t.color}"/></marker>`).join("")}
   </defs>`;
 
@@ -2286,13 +2289,21 @@ function renderGraph(){
     const t = relType(r.type);
     const dx = pb.x - pa.x, dy = pb.y - pa.y;
     const d = Math.sqrt(dx*dx + dy*dy) || 1;
-    const x1 = pa.x + dx / d * R, y1 = pa.y + dy / d * R;
-    const x2 = pb.x - dx / d * (R + (t.directed ? 6 : 0)), y2 = pb.y - dy / d * (R + (t.directed ? 6 : 0));
     const grp = pairGroups[pkey(r)];
-    let off = (grp.indexOf(r) - (grp.length - 1) / 2) * 34;
-    if (r.from > r.to) off = -off;
+    const nPair = grp.length;
+    // 多重關係：起訖點沿圓周扇開＋弧高用螢幕固定距離。
+    // 只鼓中段而兩端重合，看起來仍像一條粗線，所以端點也要分開
+    let spread = nPair > 1 ? (grp.indexOf(r) - (nPair - 1) / 2) : 0;
+    if (r.from > r.to) spread = -spread;
+    const baseAng = Math.atan2(dy, dx);
+    const fan = spread * 0.44;                          // 端點扇開角度（弧度）
+    const rEnd = R + (t.directed ? 5 : 0);
+    const a1 = baseAng + fan, a2 = baseAng + Math.PI - fan;
+    const x1 = pa.x + Math.cos(a1) * R, y1 = pa.y + Math.sin(a1) * R;
+    const x2 = pb.x + Math.cos(a2) * rEnd, y2 = pb.y + Math.sin(a2) * rEnd;
+    const off = spread * (30 / Math.max(gview.s, 0.12));   // 螢幕上恆定的弧高
     const nx = -dy / d, ny = dx / d;
-    const cx = (x1 + x2) / 2 + nx * off * 2, cy = (y1 + y2) / 2 + ny * off * 2;
+    const cx = (x1 + x2) / 2 + nx * off, cy = (y1 + y2) / 2 + ny * off;
     const dim = fset && !(fset.has(r.from) && fset.has(r.to));
     const ls = Math.min(60, 10.5 / Math.max(gview.s, 0.12));
 
@@ -2317,11 +2328,14 @@ function renderGraph(){
     // 舊版對多重關係開例外強制顯示，短邊上兩個標籤會互相壓、還蓋住姓名
     const labelPx = t.label.length * ls * gview.s * 0.62;   // 標籤螢幕寬度估算
     const edgePx = (d - R * 2) * gview.s;                    // 可見線段螢幕長度
+    // 箭頭大小依「佔線長比例」決定：大箭頭約 10px、小箭頭約 6px。
+    // 用絕對像素一刀切會把單一關係的短邊也連坐，方向資訊整片消失
+    const arrowMark = !t.directed ? null : (edgePx > 34 ? "arrow-" : edgePx > 16 ? "arrows-" : null);
     const room = edgePx > Math.max(40, labelPx * (nInPair > 1 ? 1.9 : 1.25));
     return `<g class="gedge ${dim ? "dim" : ""}">
       <path d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
         stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
-        ${t.directed ? `marker-end="url(#arrow-${esc(t.key)})"` : ""}
+        ${arrowMark ? `marker-end="url(#${arrowMark}${esc(t.key)})"` : ""}
         ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
         stroke-linecap="round" opacity="0.9"/>
       ${room ? `<text class="elabel" x="${lx}" y="${ly - (off ? 0 : 5)}" font-size="${ls.toFixed(1)}" fill="${t.color}">${esc(t.label)}</text>` : ""}
