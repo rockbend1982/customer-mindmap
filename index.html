@@ -146,7 +146,11 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 .person .name{font-weight:600;}
 .person .chip.partner{background:var(--partner); color:#fff;}
 .person .meta{font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px;}
-.person .amount{flex:0 0 auto; font-size:12.5px; font-weight:600; color:var(--ink); align-self:center; white-space:nowrap;}
+.person .side{flex:0 0 auto; align-self:center; text-align:right;}
+.person .amount{font-size:12.5px; font-weight:600; color:var(--ink); white-space:nowrap;}
+.person .last{font-size:11.5px; color:var(--ink-soft); white-space:nowrap; margin-top:2px;}
+.person.sleep .last{color:var(--hot); font-weight:600;}
+.person.sleep .dot{outline:2px dashed var(--cold); outline-offset:2px;}
 
 /* 互動紀錄項 */
 .ilog{border-left:3px solid var(--accent-soft); padding:4px 0 4px 10px; margin-bottom:10px;}
@@ -1417,7 +1421,10 @@ function personRowHTML(c){
   const tagTxt = (c.tags || []).slice(0, 2).map(t => "#" + t).join(" ") +
     ((c.tags || []).length > 2 ? " …" : "");
   const meta = [c.company, tagTxt].filter(Boolean).join("・") || "尚無備註資料";
-  return `<div class="person" data-open="${esc(c.id)}">
+  // 一整排長得一樣時掃不出誰該理，補一行「多久沒聯絡」，太久沒動的加虛線環
+  const dm = dormantInfo(c.id);
+  const last = dm.days == null ? "從未往來" : dm.days === 0 ? "今天聊過" : dm.days + " 天前";
+  return `<div class="person${dm.dormant ? " sleep" : ""}" data-open="${esc(c.id)}">
     <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
     <div class="info">
       <div class="name-row">
@@ -1427,7 +1434,10 @@ function personRowHTML(c){
       </div>
       <div class="meta">${esc(meta)}</div>
     </div>
-    ${sp ? `<div class="amount">${esc(money(sp).replace("NT$ ", "$"))}</div>` : ""}
+    <div class="side">
+      ${sp ? `<div class="amount">${esc(money(sp).replace("NT$ ", "$"))}</div>` : ""}
+      <div class="last">${last}</div>
+    </div>
   </div>`;
 }
 // 事件委派：任何 data-open 都打開詳情
@@ -1779,7 +1789,9 @@ function renderList(){
   if (listTag !== "all") list = list.filter(c => (c.tags||[]).includes(listTag));
   const body = document.getElementById("list-body");
   body.innerHTML = list.length ? list.map(personRowHTML).join("")
-    : `<div class="empty">${DB.customers.length ? "沒有符合篩選的客戶。" : "還沒有客戶，按下面的按鈕建立第一位。"}</div>`;
+    : `<div class="empty">${DB.customers.length
+        ? "沒有符合篩選的客戶。<br>把上面的篩選點掉就會全部回來。"
+        : "還沒有任何人。<br>先加幾位常聯絡的，關係圖與業績會自己長出來。<br><br>按下面的「新增客戶」開始。"}</div>`;
 }
 document.getElementById("btn-list-add").addEventListener("click", () => openEdit(null));
 
@@ -2919,11 +2931,13 @@ function renderGraph(){
   const vis = visibleCustomers();
   if (gFocus && !vis.some(c => c.id === gFocus)){ gFocus = null; gFocusDepth = 1; }
   if (!vis.length){
-    const msg = DB.customers.length
-      ? (gMode === "org" ? "還沒有任何上下線關係。到客戶詳情按「加關係」建立上線。"
-        : gMode === "intro" ? "還沒有任何「介紹人」關係。" : "沒有符合篩選的客戶。")
-      : "還沒有客戶，先去「名單」新增。";
-    svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="#8a8a8a" font-size="14">${msg}</text>`;
+    const [msg, sub] = !DB.customers.length
+      ? ["還沒有人可以畫", "先到「名單」加幾位常聯絡的，這裡會自己長出來"]
+      : gMode === "org" ? ["還沒有上下線關係", "到客戶詳情按「加關係」，關係種類選「上線」"]
+      : gMode === "intro" ? ["還沒有介紹人關係", "記下誰介紹誰，這裡就會長出轉介鏈"]
+      : ["沒有符合篩選的人", "把上面「篩選與圖例」裡的篩選點掉就會全部回來"];
+    svg.innerHTML = `<text x="50%" y="45%" text-anchor="middle" fill="var(--ink-soft)" font-size="15" font-weight="600">${msg}</text>`
+      + `<text x="50%" y="45%" dy="26" text-anchor="middle" fill="var(--ink-faint, #a5aab0)" font-size="12.5">${sub}</text>`;
     updateFocusBar(null);
     return;
   }
