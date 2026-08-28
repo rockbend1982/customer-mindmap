@@ -130,7 +130,7 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 
 /* 客戶列表項 */
 .person{
-  display:flex; align-items:center; gap:12px;
+  display:flex; align-items:flex-start; gap:12px;
   background:var(--card); border:1px solid var(--card-line); border-radius:var(--r-person);
   padding:12px; margin-bottom:8px; cursor:pointer;
 }
@@ -140,9 +140,13 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
   font-size:15px; font-weight:600; color:#fff;
 }
 .dot-hot{background:var(--hot);} .dot-warm{background:var(--warm);} .dot-cold{background:var(--cold); color:var(--cold-fg);}
+.person{padding-top:14px;}
 .person .info{flex:1; min-width:0;}
+.person .name-row{display:flex; align-items:center; flex-wrap:wrap; gap:5px 6px;}
 .person .name{font-weight:600;}
-.person .meta{font-size:12px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.person .chip.partner{background:#1f6f8b; color:#fff;}
+.person .meta{font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px;}
+.person .amount{flex:0 0 auto; font-size:12.5px; font-weight:600; color:var(--ink); align-self:center; white-space:nowrap;}
 
 /* 互動紀錄項 */
 .ilog{border-left:3px solid var(--accent-soft); padding:4px 0 4px 10px; margin-bottom:10px;}
@@ -151,12 +155,18 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 .ilog .txt{font-size:14px; white-space:pre-wrap;}
 
 /* 篩選列 */
-.filterbar{display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; -webkit-overflow-scrolling:touch;}
+.filterbar{
+  display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; -webkit-overflow-scrolling:touch;
+  -webkit-mask-image:linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  mask-image:linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+}
 .filterbar .fbtn{
   flex:0 0 auto; border:1px solid var(--line-strong); background:#fff; border-radius:99px;
   padding:5px 14px; font-size:13px; color:var(--ink-soft); cursor:pointer;
 }
 .filterbar .fbtn.on{background:var(--btn-primary); border-color:var(--btn-primary); color:#fff;}
+.filterbar .fdivider{flex:0 0 1px; align-self:stretch; background:var(--line); margin:0 2px;}
+.filterbar.tags{margin-top:-4px;}
 
 /* ===== 底部彈窗 sheet ===== */
 #sheet-mask{
@@ -262,7 +272,7 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
     <!-- 名單 -->
     <section class="view" id="view-list">
       <div class="filterbar" id="list-warmth-filter"></div>
-      <div class="filterbar" id="list-tag-filter"></div>
+      <div class="filterbar tags" id="list-tag-filter"></div>
       <div id="list-body"></div>
       <button class="btn primary" style="width:100%; margin-top:6px;" id="btn-list-add">新增客戶</button>
     </section>
@@ -575,17 +585,22 @@ function searchCustomers(q){
   });
 }
 function personRowHTML(c){
-  const lc = lastContact(c.id);
   const sp = spentOf(c.id);
   const dl = downlinesOf(c.id).length;
-  const meta = [isPartner(c) ? (dl ? "夥伴・直屬 " + dl + " 人" : "夥伴") : "", c.company, sp ? "累計 " + money(sp) : "", (c.tags||[]).map(t => "#" + t).join(" "),
-    lc ? ("上次聯絡 " + lc) : "尚無互動紀錄"].filter(Boolean).join("・");
+  const tagTxt = (c.tags || []).slice(0, 2).map(t => "#" + t).join(" ") +
+    ((c.tags || []).length > 2 ? " …" : "");
+  const meta = [c.company, tagTxt].filter(Boolean).join("・") || "尚無備註資料";
   return `<div class="person" data-open="${c.id}">
     <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
     <div class="info">
-      <div class="name">${esc(c.name)} <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span></div>
+      <div class="name-row">
+        <span class="name">${esc(c.name)}</span>
+        <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span>
+        ${isPartner(c) ? `<span class="chip partner">夥伴${dl ? "・直屬 " + dl : ""}</span>` : ""}
+      </div>
       <div class="meta">${esc(meta)}</div>
     </div>
+    ${sp ? `<div class="amount">${esc(money(sp).replace("NT$ ", "$"))}</div>` : ""}
   </div>`;
 }
 // 事件委派：任何 data-open 都打開詳情
@@ -716,11 +731,14 @@ let listWarmth = "all";
 let listTag = "all";
 function renderList(){
   const wf = document.getElementById("list-warmth-filter");
-  const options = [["all","全部"],["_partner","夥伴"],["_customer","純顧客"],
-    ["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")],
-    ["_buy","有成交"],["_nobuy","未成交"]];
-  wf.innerHTML = options.map(([k,l]) =>
-    `<button class="fbtn ${listWarmth===k?"on":""}" data-w="${k}">${l}</button>`).join("");
+  const groups = [
+    [["all","全部"],["_partner","夥伴"],["_customer","純顧客"]],
+    [["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")]],
+    [["_buy","有成交"],["_nobuy","未成交"]],
+  ];
+  wf.innerHTML = groups.map(g => g.map(([k,l]) =>
+    `<button class="fbtn ${listWarmth===k?"on":""}" data-w="${k}">${l}</button>`).join("")
+  ).join('<span class="fdivider"></span>');
   wf.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { listWarmth = b.dataset.w; renderList(); }));
 
   const tags = [...new Set(DB.customers.flatMap(c => c.tags || []))].sort();
