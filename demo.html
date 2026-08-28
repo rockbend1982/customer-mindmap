@@ -292,6 +292,7 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
           <button class="btn grow" id="btn-import">匯入備份</button>
         </div>
         <input type="file" id="import-file" accept=".json,application/json" style="display:none;">
+        <div id="prebak-row"></div>
         <div class="muted" style="margin-top:10px;">備份會產生一個 JSON 檔，請在分享面板選「儲存到檔案」→ iCloud Drive。匯入會以備份內容<b>整份取代</b>目前資料。</div>
       </div>
       <div class="card">
@@ -582,8 +583,14 @@ let DB = null;
 
 function uid(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function todayStr(){
-  const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  // 固定用台北時區判定「今天」，避免裝置時區設定影響待辦、生日、沉睡天數
+  try {
+    return new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Taipei", year:"numeric", month:"2-digit", day:"2-digit"})
+      .format(new Date());
+  } catch(e){
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
 }
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -596,22 +603,103 @@ function emptyDB(){
 function migrate(d){
   const base = emptyDB();
   if (!d || typeof d !== "object" || !Array.isArray(d.customers)) throw new Error("格式不正確");
-  base.customers = (d.customers || []).filter(c =>
-    c && typeof c === "object" && typeof c.id === "string" && c.id &&
-    typeof c.name === "string" && c.name);
-  base.relations = d.relations || [];
-  base.interactions = d.interactions || [];
-  base.purchases = d.purchases || [];
-  base.tasks = (d.tasks || []).filter(t => t && typeof t === "object" && typeof t.id === "string");
-  base.settings = (d.settings && typeof d.settings === "object") ? d.settings : {};
-  base.lastBackupAt = d.lastBackupAt || null;
-  const types = Array.isArray(d.relationTypes) && d.relationTypes.length ? d.relationTypes : DEFAULT_RELTYPES;
-  // 確保內建五種一定在
+
+  // 匯入的 JSON 可能是手改過的：逐欄驗證，不合格的丟掉而不是讓它進資料層後炸畫面
+  const isStr = v => typeof v === "string";
+  const safeId = v => isStr(v) && /^[A-Za-z0-9_-]{1,64}$/.test(v);
+  const isDate = v => isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+    (() => { const t = new Date(v + "T00:00:00"); return !isNaN(t) && v === t.getFullYear() + "-" +
+      String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); })();
+  const isBirthday = v => isStr(v) && (/^\d{2}-\d{2}$/.test(v) || isDate(v));
+  const isColor = v => isStr(v) && /^#[0-9a-fA-F]{6}$/.test(v);
+  const num = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  const str = v => isStr(v) ? v : "";
+  const dropped = {customers:0, relations:0, interactions:0, purchases:0, tasks:0};
+
+  const seenC = new Set();
+  base.customers = d.customers.filter(c => {
+    const ok = c && typeof c === "object" && safeId(c.id) && isStr(c.name) && c.name && !seenC.has(c.id);
+    if (ok) seenC.add(c.id); else dropped.customers++;
+    return ok;
+  }).map(c => ({
+    id: c.id, name: c.name,
+    phone: str(c.phone), company: str(c.company), source: str(c.source),
+    lineId: str(c.lineId), birthday: isBirthday(c.birthday) ? c.birthday : "",
+    tags: Array.isArray(c.tags) ? c.tags.filter(isStr).slice(0, 30) : [],
+    warmth: WARMTH[c.warmth] ? c.warmth : "warm",
+    role: ROLES[c.role] ? c.role : "customer",
+    preference: str(c.preference), note: str(c.note),
+    pos: (c.pos && Number.isFinite(Number(c.pos.x)) && Number.isFinite(Number(c.pos.y)))
+      ? {x:Number(c.pos.x), y:Number(c.pos.y)} : null,
+    createdAt: num(c.createdAt) || Date.now(), updatedAt: num(c.updatedAt) || Date.now(),
+  }));
+
+  const has = id => seenC.has(id);          // 外鍵檢查：指向不存在客戶的資料一律丟棄
+  const seenR = new Set();
+  base.relations = (Array.isArray(d.relations) ? d.relations : []).filter(r => {
+    const ok = r && typeof r === "object" && safeId(r.id) && !seenR.has(r.id) &&
+      has(r.from) && has(r.to) && isStr(r.type) && r.from !== r.to;
+    if (ok) seenR.add(r.id); else dropped.relations++;
+    return ok;
+  }).map(r => ({id:r.id, from:r.from, to:r.to, type:r.type, createdAt: num(r.createdAt) || Date.now()}));
+
+  base.interactions = (Array.isArray(d.interactions) ? d.interactions : []).filter(i => {
+    const ok = i && typeof i === "object" && safeId(i.id) && has(i.customerId) && isDate(i.date) && isStr(i.text);
+    if (!ok) dropped.interactions++;
+    return ok;
+  }).map(i => ({id:i.id, customerId:i.customerId, date:i.date, text:i.text, createdAt: num(i.createdAt) || Date.now()}));
+
+  base.purchases = (Array.isArray(d.purchases) ? d.purchases : []).filter(x => {
+    const ok = x && typeof x === "object" && safeId(x.id) && has(x.customerId) && isDate(x.date) && isStr(x.item) && x.item;
+    if (!ok) dropped.purchases++;
+    return ok;
+  }).map(x => {
+    const amt = num(x.amount), sv = num(x.sv), cy = num(x.cycle);
+    return {id:x.id, customerId:x.customerId, date:x.date, item:x.item,
+      amount: (amt !== null && amt >= 0) ? amt : null,
+      sv: (sv !== null && sv >= 0) ? sv : null,
+      cycle: (cy !== null && cy > 0 && cy <= 3650) ? Math.round(cy) : null,
+      note: str(x.note), createdAt: num(x.createdAt) || Date.now()};
+  });
+
+  base.tasks = (Array.isArray(d.tasks) ? d.tasks : []).filter(t => {
+    const ok = t && typeof t === "object" && safeId(t.id) && has(t.customerId) && isDate(t.due);
+    if (!ok) dropped.tasks++;
+    return ok;
+  }).map(t => ({id:t.id, customerId:t.customerId, due:t.due, text: str(t.text) || "跟進",
+    done: !!t.done, doneAt: num(t.doneAt) || null, createdAt: num(t.createdAt) || Date.now()}));
+
+  const st = (d.settings && typeof d.settings === "object") ? d.settings : {};
+  base.settings = {};
+  if (st.skin === "paper" || st.skin === "nuskin") base.settings.skin = st.skin;
+  if (st.warmthColors && typeof st.warmthColors === "object"){
+    const wc = {};
+    ["hot", "warm", "cold"].forEach(k => { if (isColor(st.warmthColors[k])) wc[k] = st.warmthColors[k]; });
+    if (Object.keys(wc).length) base.settings.warmthColors = wc;
+  }
+  if (st.warmthLabels && typeof st.warmthLabels === "object"){
+    const wl = {};
+    ["hot", "warm", "cold"].forEach(k => { if (isStr(st.warmthLabels[k]) && st.warmthLabels[k]) wl[k] = st.warmthLabels[k].slice(0, 20); });
+    if (Object.keys(wl).length) base.settings.warmthLabels = wl;
+  }
+  if (isColor(st.partnerColor)) base.settings.partnerColor = st.partnerColor;
+  const dd = num(st.dormantDays);
+  if (dd !== null && dd >= 1 && dd <= 365) base.settings.dormantDays = Math.round(dd);
+
+  const types = Array.isArray(d.relationTypes) && d.relationTypes.length
+    ? d.relationTypes.filter(t => t && typeof t === "object" && isStr(t.key) && t.key && isStr(t.label) && t.label)
+        .map(t => ({key:t.key, label:t.label.slice(0, 20), directed: !!t.directed,
+          color: isColor(t.color) ? t.color : "#888888", builtin: !!t.builtin, tree: !!t.tree}))
+    : JSON.parse(JSON.stringify(DEFAULT_RELTYPES));   // 深拷貝：直接引用會讓改名/改色污染全域預設
   const have = new Set(types.map(t => t.key));
   DEFAULT_RELTYPES.forEach(t => { if (!have.has(t.key)) types.push(JSON.parse(JSON.stringify(t))); });
   base.relationTypes = types;
+
+  base.lastBackupAt = isStr(d.lastBackupAt) ? d.lastBackupAt : null;
+  base._dropped = Object.values(dropped).some(n => n > 0) ? dropped : null;
   return base;
 }
+
 function loadDB(){
   let raw = null;
   try { raw = localStorage.getItem(KEY); } catch(e){}
@@ -624,9 +712,15 @@ function loadDB(){
   }
 }
 function save(){
-  try { localStorage.setItem(KEY, JSON.stringify(DB)); }
-  catch(e){ alert("儲存失敗：" + e.message); }
+  // 回傳是否真的寫入；失敗時明講「這次修改沒有存進去」，不要讓畫面看起來成功
+  let ok = false;
+  try { localStorage.setItem(KEY, JSON.stringify(DB)); ok = true; }
+  catch(e){
+    alert("儲存失敗，這次的修改沒有存進裝置：" + e.message +
+      "\n\n可能是儲存空間已滿或瀏覽器隱私模式。請先用「備份」把資料匯出，避免遺失。");
+  }
   renderHeadStats();
+  return ok;
 }
 function getCustomer(id){ return DB.customers.find(c => c.id === id) || null; }
 function relType(key){ return DB.relationTypes.find(t => t.key === key) || {key, label:key, directed:false, color:"#999"}; }
@@ -702,10 +796,14 @@ function birthdayInDays(c, within){
 
 /* ===== 回購提醒 ===== */
 function repurchaseDue(id){
-  // 有設回購週期的購買，算出下次該提醒的日子；回傳最急的一筆
-  const list = DB.purchases.filter(x => x.customerId === id && x.cycle > 0);
+  // 同一商品只看最新一筆購買（否則重買後，舊紀錄會因逾期越久越搶先，永遠壓著新的）
+  const latest = {};
+  DB.purchases.filter(x => x.customerId === id && x.cycle > 0).forEach(x => {
+    const k = String(x.item || "");
+    if (!latest[k] || x.date > latest[k].date) latest[k] = x;
+  });
   let best = null;
-  list.forEach(x => {
+  Object.values(latest).forEach(x => {
     const due = new Date(new Date(x.date + "T00:00:00").getTime() + x.cycle * 86400000);
     const d = Math.round((due - new Date(todayStr() + "T00:00:00")) / 86400000);
     if (d <= 7 && (!best || d < best.days)) best = {days:d, item:x.item};
@@ -1236,7 +1334,7 @@ function customerPickerHTML(pickId, excludeId){
     .filter(c => c.id !== excludeId);
   return `<input type="search" id="${pickId}-q" placeholder="輸入姓名過濾…" autocomplete="off" style="margin-bottom:8px;">
     <select id="${pickId}" size="5" style="height:auto;">
-      ${list.map(c => `<option value="${c.id}">${esc(c.name)}${c.company ? "（" + esc(c.company) + "）" : ""}</option>`).join("")}
+      ${list.map(c => `<option value="${esc(c.id)}">${esc(c.name)}${c.company ? "（" + esc(c.company) + "）" : ""}</option>`).join("")}
     </select>`;
 }
 function wireCustomerPicker(pickId, excludeId){
@@ -1247,7 +1345,7 @@ function wireCustomerPicker(pickId, excludeId){
     const list = DB.customers.slice().sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"))
       .filter(c => c.id !== excludeId)
       .filter(c => !kw || (c.name + " " + c.company).toLowerCase().includes(kw));
-    sel.innerHTML = list.map(c => `<option value="${c.id}">${esc(c.name)}${c.company ? "（" + esc(c.company) + "）" : ""}</option>`).join("");
+    sel.innerHTML = list.map(c => `<option value="${esc(c.id)}">${esc(c.name)}${c.company ? "（" + esc(c.company) + "）" : ""}</option>`).join("");
   });
 }
 function openQuickLog(customerId){
@@ -1611,7 +1709,8 @@ function visibleCustomers(){
     const key = TREE_REL[gMode];
     const inTree = new Set();
     DB.relations.filter(r => r.type === key).forEach(r => { inTree.add(r.from); inTree.add(r.to); });
-    list = list.filter(c => inTree.has(c.id));
+    // 組織圖：夥伴即使還沒建立上下線關係也要看得到（會直接掛在「我」底下）
+    list = list.filter(c => inTree.has(c.id) || (gMode === "org" && isPartner(c)));
   }
   return list;
 }
@@ -2120,6 +2219,28 @@ function renderSettings(){
     `內建 ${CATALOG.length} 項 Nu Skin 台灣公開售價（抓取日 ${CATALOG_DATE}），記購買時可直接選、自動帶入售價與 SV。` +
     `<br>這是抓取當下的快照，促銷價會變動，實際金額請以官網或訂單為準；金額與 SV 都可以手動改。`;
 
+  // 匯入前自動暫存的資料：提供實際的還原入口（只寫不讀等於沒有救援）
+  const prebakRow = document.getElementById("prebak-row");
+  let prebak = null;
+  try { prebak = localStorage.getItem(KEY + "_prebak"); } catch(e){}
+  if (prebak){
+    let info = "";
+    try { const d = JSON.parse(prebak); info = `${(d.customers || []).length} 位客戶`; } catch(e){ info = "內容無法解析"; }
+    prebakRow.innerHTML = `<div class="muted" style="margin-top:10px;">上次匯入前自動暫存了一份資料（${esc(info)}）。</div>
+      <button class="btn" id="prebak-restore" style="width:100%; margin-top:8px;">還原匯入前的資料</button>`;
+    document.getElementById("prebak-restore").onclick = () => {
+      let incoming;
+      try { incoming = migrate(JSON.parse(prebak)); }
+      catch(err){ alert("暫存資料無法解析：" + err.message); return; }
+      if (!confirm(`將還原成匯入前的資料（${incoming.customers.length} 位客戶），\n目前的資料會被取代。確定？`)) return;
+      try { localStorage.setItem(KEY + "_prebak2", JSON.stringify(DB)); } catch(e){}
+      DB = incoming;
+      save(); gview.inited = false;
+      alert("已還原。");
+      showView("home");
+    };
+  } else prebakRow.innerHTML = "";
+
   const pcInp = document.getElementById("pc-color");
   pcInp.value = partnerColor();
   pcInp.onchange = () => {
@@ -2201,8 +2322,14 @@ document.getElementById("import-file").addEventListener("change", e => {
     if (!confirm(`備份內有 ${incoming.customers.length} 位客戶、${incoming.interactions.length} 筆紀錄。\n將整份取代目前資料（目前 ${DB.customers.length} 位客戶）。\n目前資料會自動暫存一份以防匯錯。確定匯入？`)) return;
     try { localStorage.setItem(KEY + "_prebak", JSON.stringify(DB)); } catch(_){}
     DB = incoming;
-    save(); gview.inited = false;
-    alert("匯入完成。");
+    const okSaved = save();
+    gview.inited = false;
+    const dp = incoming._dropped;
+    const dpMsg = dp ? "\n\n有部分資料格式不符已略過：" +
+      Object.entries(dp).filter(([, n]) => n > 0)
+        .map(([k, n]) => ({customers:"客戶", relations:"關係", interactions:"互動", purchases:"購買", tasks:"待辦"}[k] + " " + n + " 筆"))
+        .join("、") : "";
+    alert((okSaved ? "匯入完成。" : "匯入的資料已載入畫面，但寫入裝置失敗，請立即備份。") + dpMsg);
     showView("home");
   };
   reader.readAsText(f, "utf-8");
@@ -2269,7 +2396,11 @@ seedDemo();
 applySkin();
 renderHeadStats();
 showView("home");
-window.addEventListener("resize", () => { if (currentView === "graph") renderGraph(); });
+window.addEventListener("resize", () => {
+  if (currentView !== "graph") return;
+  gview.inited = false;   // 轉向／改變視窗後要重新 fit，否則節點會跑到畫面外
+  renderGraph();
+});
 
 </script>
 
