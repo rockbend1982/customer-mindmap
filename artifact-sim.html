@@ -6,23 +6,24 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <style>
 :root{
-  /* 主色與文字灰階取自 Nu Skin 台灣官網 CSS 實際值（logo／按鈕／連結色） */
-  --paper:#ffffff; --card:#ffffff; --ink:#272525; --ink-soft:#63666a;
-  --line:#eef1f3; --line-strong:#d8d8d8; --card-line:#e5e5e5;
-  --accent:#008ab0; --accent-soft:#e6f4f8; --accent-wash:#f4fafc;
-  --accent-hover:#00738f; --accent-active:#005f77;
-  --btn-line:#d8d8d8; --btn-primary:#008ab0; --partner:#00708f;
-  /* 熟度用暖橘做「熱」的語意，與青藍主色互補、小圓點也分得出來 */
-  --hot:#c0561f; --warm:#4a4a4a; --cold:#b9c2c8; --cold-fg:#ffffff;
-  --hot-bg:#fbeee6; --warm-bg:#eef0f1; --cold-bg:#f3f6f7;
-  --danger:#b3261e; --danger-bg:#fbeae8;
+  /* 玫瑰褐 × 奶油白：低彩度暖色，不是粉紅 */
+  --paper:#fffaf8; --card:#ffffff; --ink:#3d3436; --ink-soft:#7a6d6f;
+  --line:#f2e9e6; --line-strong:#e0d2ce; --card-line:#ece0dc;
+  --accent:#a86a72; --accent-soft:#f7ece9; --accent-wash:#fdf8f7;
+  --accent-hover:#8f545c; --accent-active:#7a464e;
+  --btn-line:#e0d2ce; --btn-primary:#a86a72;
+  /* 夥伴用冷的藍灰，跟暖色主色明確分開，才不會跟「鐵桿」的暖紅混淆 */
+  --partner:#6d7c8a;
+  --hot:#b8503f; --warm:#6b5f60; --cold:#c9c2c3; --cold-fg:#ffffff;
+  --hot-bg:#f9e9e5; --warm-bg:#f0ecec; --cold-bg:#f5f2f2;
+  --danger:#a32b28; --danger-bg:#f9e6e4;
   --logo:#c81d1d;                       /* 沿用原本的識別色，不隨主題走 */
-  --surface-sunken:#f5f8fa; --surface-hover:#eef4f7;
-  --shadow-rgb:28 46 56;
+  --surface-sunken:#faf4f2; --surface-hover:#f5ebe8;
+  --shadow-rgb:60 42 40;
   --shadow-sm:0 1px 2px rgb(var(--shadow-rgb)/.05), 0 2px 6px rgb(var(--shadow-rgb)/.05);
   --shadow-md:0 2px 4px rgb(var(--shadow-rgb)/.06), 0 8px 20px rgb(var(--shadow-rgb)/.07);
   --r-btn:999px; --r-card:12px; --r-input:8px; --r-person:12px;
-  --dot:#e9edf0;
+  --dot:#f0e6e3;
   --font-head:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei UI",sans-serif;
   --nav-h:58px;
 }
@@ -323,6 +324,16 @@ details.fold > div{padding-bottom:12px;}
   border:1px solid var(--line-strong); color:var(--ink-soft); font-size:14px; line-height:18px; text-align:center;}
 .catcard:active{border-color:var(--accent); background:var(--accent-wash);}
 .catmore{grid-column:1 / -1; text-align:center; font-size:12.5px; color:var(--ink-soft); padding:4px 0 0;}
+.minitabs{display:flex; gap:6px; margin:0 0 10px; flex-wrap:wrap;}
+.minitabs button{
+  padding:4px 11px; border:1px solid var(--card-line); border-radius:999px;
+  background:var(--card); font-size:12px; color:var(--ink-soft); cursor:pointer;
+}
+.minitabs button.on{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-active); font-weight:600;}
+.kpi > div.tap{cursor:pointer;}
+.kpi > div.tap:active{background:var(--surface-hover);}
+.bars .bcol.tap{cursor:pointer;}
+.bars .bcol.tap:active .bfill{filter:brightness(.94);}
 details.gfold{border:0; border-top:1px solid var(--line); border-radius:0; padding:0 12px; margin:0;}
 details.gfold > summary{padding:8px 0; font-size:13px; font-weight:600; color:var(--ink-soft);}
 details.gfold > div{padding-bottom:4px;}
@@ -360,8 +371,8 @@ details.detfold > div{padding:0 0 14px;}
 .bars .bcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px;}
 .bars .bwrap{flex:1 1 auto; width:100%; display:flex; align-items:flex-end;}
 /* 過去的月份用淡青，本月用主色實心——一眼看得出哪根是這個月 */
-.bars .bfill{width:100%; border-radius:6px 6px 2px 2px; background:linear-gradient(180deg,#8ec9d9,#bfe0ea);}
-.bars .bcol.now .bfill{background:linear-gradient(180deg,var(--accent),#00a5cc);}
+.bars .bfill{width:100%; border-radius:6px 6px 2px 2px; background:linear-gradient(180deg,#d9b4b4,#eddad7);}
+.bars .bcol.now .bfill{background:linear-gradient(180deg,var(--accent),#c58890);}
 .bars .bval, .bars .blab{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
 .bars .bcol.now .blab{color:var(--accent); font-weight:600;}
 /* 平均線：看得出哪幾個月在水準之上 */
@@ -369,7 +380,7 @@ details.detfold > div{padding:0 0 14px;}
 /* 標籤靠右會蓋在最新月份的柱子上（本月通常最高），改靠左並用半透明底 */
 .bars .avgline span{
   position:absolute; left:0; top:-14px; font-size:10px; color:var(--ink-soft);
-  background:rgba(255,255,255,.86); padding:0 4px; border-radius:3px; letter-spacing:.03em;
+  background:rgba(255,250,248,.9); padding:0 4px; border-radius:3px; letter-spacing:.03em;
 }
 .rankrow{
   display:flex; align-items:flex-start; gap:9px;
@@ -381,8 +392,8 @@ details.detfold > div{padding:0 0 14px;}
 .rankrow .rval{flex:0 0 auto; font-weight:600; font-variant-numeric:tabular-nums; padding-top:1px;}
 .rankrow .rsub{font-size:11.5px; color:var(--ink-soft); margin-top:3px;}
 .rankbar{height:6px; border-radius:99px; background:var(--surface-sunken); margin-top:6px; overflow:hidden;}
-.rankbar > i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),#45b4d0);}
-.rankrow:nth-child(n+5) .rankbar > i{background:linear-gradient(90deg,#8ec9d9,#bfe0ea);}
+.rankbar > i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),#c58890);}
+.rankrow:nth-child(n+5) .rankbar > i{background:linear-gradient(90deg,#d9b4b4,#eddad7);}
 </style>
 
 <div id="app">
@@ -692,15 +703,16 @@ const ROLES = {
 function roleOf(c){ return ROLES[c && c.role] ? c.role : "customer"; }
 function isPartner(c){ return roleOf(c) !== "customer"; }
 
-const DEFAULT_WARMTH = {hot:"#c0561f", warm:"#4a4a4a", cold:"#b9c2c8"};
-const DEFAULT_PARTNER = "#00708f";
+const DEFAULT_WARMTH = {hot:"#b8503f", warm:"#6b5f60", cold:"#c9c2c3"};
+const DEFAULT_PARTNER = "#6d7c8a";
 /* 舊版本的預設色。裝置上存的值如果還等於這些，代表使用者沒自訂過，
    換品牌配色時要跟著更新；真的自訂過的顏色保留不動 */
 const LEGACY_WARMTH = [
-  {hot:"#c81d1d", warm:"#252525", cold:"#c3c9cf"},
-  {hot:"#c2571a", warm:"#d99a2b", cold:"#7d8b99"},
+  {hot:"#c81d1d", warm:"#252525", cold:"#c3c9cf"},   // 極簡黑白
+  {hot:"#c2571a", warm:"#d99a2b", cold:"#7d8b99"},   // 暖紙感
+  {hot:"#c0561f", warm:"#4a4a4a", cold:"#b9c2c8"},   // 青藍版
 ];
-const LEGACY_PARTNER = ["#1f6f8b"];
+const LEGACY_PARTNER = ["#1f6f8b", "#00708f"];
 function upgradeLegacyColors(){
   const s = DB.settings || (DB.settings = {});
   let changed = false;
@@ -1070,6 +1082,46 @@ function lastContact(id){
    體驗品（kind:"trial"）一律不算業績；一張單（orderId）算一筆，客單價才不會被品項數灌水 */
 const SALES_RANGES = [["6m", "近 6 個月"], ["year", "今年"], ["all", "全部"]];
 let gSalesRange = "6m";
+let gProdSort = "amount";    // amount｜qty｜buyers
+let gProdScope = "all";      // all＝含夥伴進貨｜retail＝只算自用客戶
+let gCustSort = "amount";    // amount｜orders
+
+/* 訂單清單：KPI 點開、點某個月的柱子都用這一份 */
+function ordersListHTML(rows){
+  const by = {};
+  rows.forEach(x => {
+    const k = x.customerId + "|" + (x.orderId || x.id);
+    (by[k] = by[k] || []).push(x);
+  });
+  const list = Object.values(by).map(items => ({
+    date: items[0].date, customerId: items[0].customerId,
+    amount: items.reduce((t, x) => t + (Number(x.amount) || 0), 0), items
+  })).sort((a, b) => b.date.localeCompare(a.date));
+  return list.map(o => {
+    const c = getCustomer(o.customerId);
+    return `<div class="rankrow"${c ? ` data-open="${esc(c.id)}" style="cursor:pointer;"` : ""}>
+      <div class="rname">${c ? esc(c.name) : "（已刪除的客戶）"}
+        <div class="rsub">${esc(o.date)}・${o.items.map(x => esc(x.item) + (x.qty > 1 ? " ×" + x.qty : "")).join("、")}</div>
+      </div>
+      <div class="rval">${o.amount ? shortMoney(o.amount) : "未填金額"}</div>
+    </div>`;
+  }).join("") || `<div class="muted">這段期間沒有紀錄。</div>`;
+}
+function openMonthDetail(key){
+  const rows = DB.purchases.filter(x => !isTrial(x) && !fromPartner(x.customerId) && x.date.slice(0, 7) === key);
+  const sum = rows.reduce((t, x) => t + (Number(x.amount) || 0), 0);
+  openSheet(`${Number(key.slice(5))} 月・零售 ${shortMoney(sum)}`, ordersListHTML(rows));
+}
+function openKpiDetail(kind){
+  const rows = salesRows().filter(x => !fromPartner(x.customerId));
+  const label = (SALES_RANGES.find(r => r[0] === gSalesRange) || ["", ""])[1];
+  const n = orderCount(rows);
+  const sum = rows.reduce((t, x) => t + (Number(x.amount) || 0), 0);
+  const title = kind === "orders" ? `${label}的 ${n} 張單`
+    : kind === "avg" ? `${label}客單價 ${shortMoney(n ? sum / n : 0)}`
+    : `${label}營業額 ${shortMoney(sum)}`;
+  openSheet(title, ordersListHTML(rows));
+}
 
 function salesFrom(){
   const t = todayStr();
@@ -1163,11 +1215,12 @@ function renderSales(){
   const kpi = `<div class="card">
     <div class="cardtitle">${esc(rangeLabel)}零售業績${hasPartner ? ` <span class="muted">只算自用客戶</span>` : ""}</div>
     <div class="kpi">
-      <div><b>${shortMoney(sum)}</b><span>營業額</span></div>
-      <div><b>${orders}</b><span>張單</span></div>
-      <div><b>${shortMoney(orders ? sum / orders : 0)}</b><span>平均客單</span></div>
+      <div class="tap" data-kpi="sum"><b>${shortMoney(sum)}</b><span>營業額</span></div>
+      <div class="tap" data-kpi="orders"><b>${orders}</b><span>張單</span></div>
+      <div class="tap" data-kpi="avg"><b>${shortMoney(orders ? sum / orders : 0)}</b><span>平均客單</span></div>
       ${sv ? `<div><b>${Math.round(sv).toLocaleString("en-US")}</b><span>SV</span></div>` : ""}
     </div>
+    ${orders ? `<div class="muted" style="margin-top:9px;">點方塊看是哪幾單</div>` : ""}
   </div>`;
 
   // 業績是結果，行動量才是自己控制得了的部分
@@ -1204,7 +1257,7 @@ function renderSales(){
     : "";
   const trend = `<div class="card">
     <div class="cardtitle">月營業額${hasPartner ? ` <span class="muted">零售</span>` : ""}</div>
-    <div class="bars">${avgLine}${keys.map(k => `<div class="bcol ${k === thisKey ? "now" : ""}">
+    <div class="bars">${avgLine}${keys.map(k => `<div class="bcol ${k === thisKey ? "now" : ""}${mSum[k] ? " tap" : ""}"${mSum[k] ? ` data-month="${k}"` : ""}>
         ${showVal ? `<div class="bval">${mSum[k] ? shortMoney(mSum[k]) : ""}</div>` : ""}
         <div class="bwrap"><div class="bfill" style="height:${mSum[k] ? Math.max(3, Math.round(mSum[k] / peak * 100)) : 1}%"></div></div>
         <div class="blab">${Number(k.slice(5))}月</div>
@@ -1213,35 +1266,49 @@ function renderSales(){
       (mSum[thisKey] || mSum[lastKey]) ? `（${diff >= 0 ? "多" : "少"} ${money(Math.abs(diff)).replace("NT$ ", "")}）` : ""}</div>` : ""}
   </div>`;
 
-  // 產品排行看的是貨品流動，含夥伴進貨才是全貌，所以這塊不套零售口徑
+  // 產品排行預設看貨品流動（含夥伴進貨），也可以切成只看自用客戶的零售
+  const prodRows = gProdScope === "retail" ? retail : rows;
   const byItem = {};
-  rows.forEach(x => {
+  prodRows.forEach(x => {
     const k = String(x.item || "");
     const o = byItem[k] || (byItem[k] = {item: k, amount: 0, qty: 0, buyers: new Set()});
     o.amount += Number(x.amount) || 0;
     o.qty += Number(x.qty) || 1;
     o.buyers.add(x.customerId);
   });
-  const items = Object.values(byItem).sort((a, b) => b.amount - a.amount || b.qty - a.qty);
-  const topAmt = Math.max(1, items.length ? items[0].amount : 1);
+  const prodKey = gProdSort === "qty" ? "qty" : gProdSort === "buyers" ? "buyers" : "amount";
+  const prodVal = o => prodKey === "buyers" ? o.buyers.size : o[prodKey];
+  const items = Object.values(byItem).sort((a, b) => prodVal(b) - prodVal(a) || b.amount - a.amount);
+  const topAmt = Math.max(1, items.length ? prodVal(items[0]) : 1);
   const prod = items.length ? `<div class="card">
-    <div class="cardtitle">產品排行 <span class="muted">共 ${items.length} 項${hasPartner ? "・含夥伴進貨" : ""}・點開看誰買的</span></div>
+    <div class="cardtitle">產品排行 <span class="muted">共 ${items.length} 項・點開看誰買的</span></div>
+    <div class="minitabs">
+      ${[["amount", "金額"], ["qty", "件數"], ["buyers", "幾人買"]].map(([k, t]) =>
+        `<button data-psort="${k}"${gProdSort === k ? ' class="on"' : ""}>${t}</button>`).join("")}
+      ${hasPartner ? `<span style="flex:0 0 1px; background:var(--line-strong); align-self:stretch; margin:3px 5px;"></span>` +
+        [["all", "含夥伴進貨"], ["retail", "只看零售"]].map(([k, t]) =>
+          `<button data-pscope="${k}"${gProdScope === k ? ' class="on"' : ""}>${t}</button>`).join("") : ""}
+    </div>
     ${items.slice(0, 10).map((o, i) => `<div class="rankrow" data-sitem="${esc(o.item)}" style="cursor:pointer;">
       <div class="rno">${i + 1}</div>
       <div class="rname">${esc(o.item)}
-        <div class="rankbar"><i style="width:${Math.max(2, Math.round(o.amount / topAmt * 100))}%"></i></div>
+        <div class="rankbar"><i style="width:${Math.max(2, Math.round(prodVal(o) / topAmt * 100))}%"></i></div>
         <div class="rsub">${o.qty} 件・${o.buyers.size} 人買${o.amount ? "" : "・未填金額"}</div>
       </div>
-      <div class="rval">${shortMoney(o.amount)}</div>
+      <div class="rval">${prodKey === "qty" ? o.qty + " 件" : prodKey === "buyers" ? o.buyers.size + " 人" : shortMoney(o.amount)}</div>
     </div>`).join("")}
     ${items.length > 10 ? `<div class="muted" style="margin-top:10px;">只列前 10 項</div>` : ""}
   </div>` : "";
 
-  const byCust = {};
-  retail.forEach(x => byCust[x.customerId] = (byCust[x.customerId] || 0) + (Number(x.amount) || 0));
-  const custs = Object.entries(byCust).map(([id, v]) => ({c: getCustomer(id), v}))
-    .filter(x => x.c).sort((a, b) => b.v - a.v);
-  const topCust = Math.max(1, custs.length ? custs[0].v : 1);
+  const byCust = {}, ordersByCust = {};
+  retail.forEach(x => {
+    byCust[x.customerId] = (byCust[x.customerId] || 0) + (Number(x.amount) || 0);
+    (ordersByCust[x.customerId] = ordersByCust[x.customerId] || new Set()).add(x.orderId || x.id);
+  });
+  const custs = Object.entries(byCust).map(([id, v]) => ({c: getCustomer(id), v, n: (ordersByCust[id] || new Set()).size}))
+    .filter(x => x.c).sort((a, b) => gCustSort === "orders" ? (b.n - a.n || b.v - a.v) : (b.v - a.v));
+  const custKeyVal = x => gCustSort === "orders" ? x.n : x.v;
+  const topCust = Math.max(1, custs.length ? custKeyVal(custs[0]) : 1);
   const from = salesFrom();
   let newSum = 0, newCnt = 0;
   Object.keys(byCust).forEach(id => {
@@ -1253,12 +1320,17 @@ function renderSales(){
     : "";
   const custCard = custs.length ? `<div class="card">
     <div class="cardtitle">客戶排行${hasPartner ? ` <span class="muted">自用客戶</span>` : ""}</div>
+    <div class="minitabs">
+      ${[["amount", "金額"], ["orders", "單數"]].map(([k, t]) =>
+        `<button data-csort="${k}"${gCustSort === k ? ' class="on"' : ""}>${t}</button>`).join("")}
+    </div>
     ${custs.slice(0, 5).map((x, i) => `<div class="rankrow" data-open="${esc(x.c.id)}" style="cursor:pointer;">
       <div class="rno">${i + 1}</div>
       <div class="rname">${esc(x.c.name)}
-        <div class="rankbar"><i style="width:${Math.max(2, Math.round(x.v / topCust * 100))}%"></i></div>
+        <div class="rankbar"><i style="width:${Math.max(2, Math.round(custKeyVal(x) / topCust * 100))}%"></i></div>
+        <div class="rsub">${x.n} 單・${shortMoney(x.v)}</div>
       </div>
-      <div class="rval">${shortMoney(x.v)}</div>
+      <div class="rval">${gCustSort === "orders" ? x.n + " 單" : shortMoney(x.v)}</div>
     </div>`).join("")}${newLine}
   </div>` : "";
 
@@ -1327,6 +1399,16 @@ function openSalesItem(item){
 document.body.addEventListener("click", e => {
   const b = e.target.closest("[data-srange]");
   if (b){ gSalesRange = b.dataset.srange; renderSales(); return; }
+  const ps = e.target.closest("[data-psort]");
+  if (ps){ gProdSort = ps.dataset.psort; renderSales(); return; }
+  const pc = e.target.closest("[data-pscope]");
+  if (pc){ gProdScope = pc.dataset.pscope; renderSales(); return; }
+  const cs = e.target.closest("[data-csort]");
+  if (cs){ gCustSort = cs.dataset.csort; renderSales(); return; }
+  const mo = e.target.closest("[data-month]");
+  if (mo){ openMonthDetail(mo.dataset.month); return; }
+  const kp = e.target.closest("[data-kpi]");
+  if (kp){ openKpiDetail(kp.dataset.kpi); return; }
   const it = e.target.closest("[data-sitem]");
   if (it) openSalesItem(it.dataset.sitem);
 });
@@ -2974,7 +3056,7 @@ function renderGraph(){
   const R = 27;
   const defs = `<defs>
     <filter id="nsh" x="-40%" y="-40%" width="180%" height="180%">
-      <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="rgb(28,46,56)" flood-opacity="0.28"/>
+      <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="rgb(60,42,40)" flood-opacity="0.26"/>
     </filter>
     <radialGradient id="gsheen" cx="34%" cy="28%" r="74%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.40"/>
