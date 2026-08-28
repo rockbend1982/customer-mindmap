@@ -367,12 +367,20 @@ details.detfold > div{padding:0 0 14px;}
 .kpi > div{background:var(--accent-soft); border-radius:12px; padding:9px 11px;}
 .kpi b{display:block; font-size:17px; font-variant-numeric:tabular-nums; line-height:1.35;}
 .kpi span{font-size:11.5px; color:var(--ink-soft);}
-.bars{display:flex; align-items:stretch; gap:6px; height:136px; margin:4px 0 2px;}
+.bars{position:relative; display:flex; align-items:stretch; gap:6px; height:136px; margin:4px 0 2px;}
 .bars .bcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px;}
 .bars .bwrap{flex:1 1 auto; width:100%; display:flex; align-items:flex-end;}
-.bars .bfill{width:100%; border-radius:5px 5px 2px 2px; background:var(--btn-primary);}
-.bars .bcol.now .bfill{background:var(--accent);}
+/* 過去的月份用淡青，本月用主色實心——一眼看得出哪根是這個月 */
+.bars .bfill{width:100%; border-radius:6px 6px 2px 2px; background:linear-gradient(180deg,#8ec9d9,#bfe0ea);}
+.bars .bcol.now .bfill{background:linear-gradient(180deg,var(--accent),#00a5cc);}
 .bars .bval, .bars .blab{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
+.bars .bcol.now .blab{color:var(--accent); font-weight:600;}
+/* 平均線：看得出哪幾個月在水準之上 */
+.bars .avgline{position:absolute; left:0; right:0; border-top:1px dashed var(--line-strong); pointer-events:none;}
+.bars .avgline span{
+  position:absolute; right:0; top:-15px; font-size:10px; color:var(--ink-soft);
+  background:var(--card); padding:0 4px; letter-spacing:.03em;
+}
 .rankrow{
   display:flex; align-items:flex-start; gap:9px;
   padding:8px 0; border-bottom:1px solid var(--line);
@@ -382,8 +390,9 @@ details.detfold > div{padding:0 0 14px;}
 .rankrow .rname{flex:1 1 auto; min-width:0; font-weight:600;}
 .rankrow .rval{flex:0 0 auto; font-weight:600; font-variant-numeric:tabular-nums; padding-top:1px;}
 .rankrow .rsub{font-size:11.5px; color:var(--ink-soft); margin-top:3px;}
-.rankbar{height:4px; border-radius:99px; background:var(--accent-soft); margin-top:5px;}
-.rankbar > i{display:block; height:100%; border-radius:99px; background:var(--btn-primary);}
+.rankbar{height:6px; border-radius:99px; background:var(--surface-sunken); margin-top:6px; overflow:hidden;}
+.rankbar > i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),#45b4d0);}
+.rankrow:nth-child(n+5) .rankbar > i{background:linear-gradient(90deg,#8ec9d9,#bfe0ea);}
 </style>
 </head>
 <body>
@@ -1199,9 +1208,14 @@ function renderSales(){
   const lastKey = keys.length > 1 ? keys[keys.length - 2] : null;
   const showVal = keys.length <= 8;
   const diff = lastKey ? mSum[thisKey] - mSum[lastKey] : 0;
+  // 平均線的位置：bars 高 136，扣掉上下兩行文字後柱子區約 106px，往上再讓 18px 給月份標籤
+  const avg = keys.reduce((t, k) => t + mSum[k], 0) / (keys.length || 1);
+  const avgLine = (keys.length > 1 && avg > 0)
+    ? `<div class="avgline" style="bottom:${Math.round(avg / peak * 106) + 18}px"><span>平均 ${shortMoney(avg)}</span></div>`
+    : "";
   const trend = `<div class="card">
     <div class="cardtitle">月營業額${hasPartner ? ` <span class="muted">零售</span>` : ""}</div>
-    <div class="bars">${keys.map(k => `<div class="bcol ${k === thisKey ? "now" : ""}">
+    <div class="bars">${avgLine}${keys.map(k => `<div class="bcol ${k === thisKey ? "now" : ""}">
         ${showVal ? `<div class="bval">${mSum[k] ? shortMoney(mSum[k]) : ""}</div>` : ""}
         <div class="bwrap"><div class="bfill" style="height:${mSum[k] ? Math.max(3, Math.round(mSum[k] / peak * 100)) : 1}%"></div></div>
         <div class="blab">${Number(k.slice(5))}月</div>
