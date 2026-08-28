@@ -270,6 +270,35 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
 .qa button.on .ic{background:rgba(255,255,255,.2); color:#fff;}
 .qa button:active{transform:translateY(1px);}
 
+/* ===== 表單：選人、選日期、選填區 ===== */
+.pillpick{display:flex; gap:8px; overflow-x:auto; padding:2px 2px 6px; -webkit-overflow-scrolling:touch;}
+.ppill{
+  flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:5px 13px 5px 5px;
+  border:1px solid var(--card-line); border-radius:999px; background:var(--card);
+  font-size:14px; color:var(--ink); cursor:pointer; white-space:nowrap;
+}
+.ppill .av{
+  width:26px; height:26px; border-radius:50%; color:#fff; font-size:12.5px; font-weight:600;
+  display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+}
+.ppill.on{border-color:var(--accent); background:var(--accent-soft); font-weight:600;}
+.seg{display:flex; gap:8px;}
+.seg button{
+  flex:1 1 0; padding:9px 6px; border:1px solid var(--card-line); border-radius:var(--r-input);
+  background:var(--card); font-size:14px; color:var(--ink); cursor:pointer;
+}
+.seg button.on{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-active); font-weight:600;}
+details.fold{border:1px solid var(--card-line); border-radius:var(--r-input); padding:0 12px; margin-top:14px;}
+details.fold > summary{
+  list-style:none; cursor:pointer; padding:12px 0; font-weight:600; font-size:14.5px;
+  display:flex; align-items:center; gap:8px;
+}
+details.fold > summary::-webkit-details-marker{display:none;}
+details.fold > summary::after{content:"▾"; margin-left:auto; color:var(--ink-soft); font-size:12px;}
+details.fold[open] > summary::after{content:"▴";}
+details.fold > summary .muted{font-weight:400;}
+details.fold > div{padding-bottom:12px;}
+
 /* ===== 業績分頁 ===== */
 .cardtitle{font-weight:700; margin-bottom:8px; display:flex; align-items:baseline; gap:8px;}
 .kpi{display:grid; grid-template-columns:repeat(auto-fit, minmax(82px, 1fr)); gap:9px;}
@@ -1966,14 +1995,70 @@ function pickerOptionsHTML(excludeId, kw){
   return `<optgroup label="最近往來">${recent.map(opt).join("")}</optgroup>` +
     `<optgroup label="全部">${all.filter(c => !rset.has(c.id)).map(opt).join("")}</optgroup>`;
 }
+/* 選人改成一排頭像 pill：最近往來的排前面，點一下就選好，
+   人多時再打字過濾。原本的 select 清單一次只露五個，每次都要捲 */
 function customerPickerHTML(pickId, excludeId){
-  return `<input type="search" id="${pickId}-q" placeholder="輸入姓名過濾…" autocomplete="off" style="margin-bottom:8px;">
-    <select id="${pickId}" size="5" style="height:auto;">${pickerOptionsHTML(excludeId, "")}</select>`;
+  return `<input type="hidden" id="${pickId}">
+    <div class="pillpick" id="${pickId}-wrap"></div>
+    <input type="search" id="${pickId}-q" placeholder="打字找人…" autocomplete="off" style="margin-top:6px;">`;
+}
+function renderPillPicker(pickId, excludeId, kw){
+  const hid = document.getElementById(pickId);
+  const wrap = document.getElementById(pickId + "-wrap");
+  if (!hid || !wrap) return;
+  kw = String(kw || "").trim().toLowerCase();
+  const match = c => c.id !== excludeId && (!kw || (c.name + " " + (c.company || "")).toLowerCase().includes(kw));
+  const byName = (a, b) => a.name.localeCompare(b.name, "zh-Hant");
+  let list;
+  if (kw){
+    list = DB.customers.filter(match).sort(byName);
+  } else {
+    const recent = recentContactIds(8).map(getCustomer).filter(c => c && match(c));
+    const seen = new Set(recent.map(c => c.id));
+    list = recent.concat(DB.customers.filter(c => match(c) && !seen.has(c.id)).sort(byName));
+  }
+  wrap.innerHTML = list.slice(0, 40).map(c =>
+    `<button type="button" class="ppill${hid.value === c.id ? " on" : ""}" data-pick="${esc(c.id)}">
+      <span class="av" style="background:${warmthColor(WARMTH[c.warmth] ? c.warmth : "warm")};">${esc(c.name.slice(0, 1))}</span>${esc(c.name)}</button>`
+  ).join("") || `<div class="muted">找不到符合的人。</div>`;
+  wrap.querySelectorAll("[data-pick]").forEach(b => b.addEventListener("click", () => {
+    hid.value = b.dataset.pick;
+    const q = document.getElementById(pickId + "-q");
+    renderPillPicker(pickId, excludeId, q ? q.value : "");
+  }));
 }
 function wireCustomerPicker(pickId, excludeId){
+  renderPillPicker(pickId, excludeId, "");
   const q = document.getElementById(pickId + "-q");
-  const sel = document.getElementById(pickId);
-  q.addEventListener("input", () => { sel.innerHTML = pickerOptionsHTML(excludeId, q.value); });
+  if (q) q.addEventListener("input", () => renderPillPicker(pickId, excludeId, q.value));
+}
+/* 選日期：九成的紀錄不是今天就是昨天，先給兩顆鈕，真的要挑再開日曆 */
+function dateSegHTML(id, value){
+  const t = todayStr();
+  const y = (() => { const d = new Date(t + "T00:00:00"); d.setDate(d.getDate() - 1);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); })();
+  const mode = value === t ? "today" : value === y ? "yest" : "pick";
+  return `<div class="seg" id="${id}-seg">
+      <button type="button" data-dseg="today"${mode === "today" ? ' class="on"' : ""}>今天</button>
+      <button type="button" data-dseg="yest"${mode === "yest" ? ' class="on"' : ""}>昨天</button>
+      <button type="button" data-dseg="pick"${mode === "pick" ? ' class="on"' : ""}>選日期</button>
+    </div>
+    <input type="date" id="${id}" value="${esc(value)}" style="margin-top:8px;${mode === "pick" ? "" : "display:none;"}">`;
+}
+function wireDateSeg(id){
+  const seg = document.getElementById(id + "-seg"), inp = document.getElementById(id);
+  if (!seg || !inp) return;
+  const t = todayStr();
+  const y = (() => { const d = new Date(t + "T00:00:00"); d.setDate(d.getDate() - 1);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); })();
+  seg.querySelectorAll("[data-dseg]").forEach(b => b.addEventListener("click", () => {
+    seg.querySelectorAll("[data-dseg]").forEach(x => x.classList.toggle("on", x === b));
+    const k = b.dataset.dseg;
+    inp.style.display = k === "pick" ? "" : "none";
+    if (k === "today") inp.value = t;
+    if (k === "yest") inp.value = y;
+    if (k === "pick") inp.focus();
+  }));
 }
 function openQuickLog(customerId, editId){
   if (!DB.customers.length){ alert("還沒有任何客戶，先新增一位吧。"); return; }
@@ -1981,7 +2066,7 @@ function openQuickLog(customerId, editId){
   const ex = editId ? DB.interactions.find(x => x.id === editId) : null;
   openSheet(ex ? "修改這筆互動" : "記一筆互動", `
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("log-pick", null)}
-    <label>日期</label><input type="date" id="log-date" value="${ex ? esc(ex.date) : todayStr()}">
+    <label>日期</label>${dateSegHTML("log-date", ex ? ex.date : todayStr())}
     <label>聊了什麼</label><textarea id="log-text" rows="4" placeholder="重點記兩句就好…">${ex ? esc(ex.text) : ""}</textarea>
     ${ex ? "" : `<hr class="card-divider">
     <label>下次跟進（選填，時間到會出現在首頁「今天要做的事」）</label>
@@ -1990,6 +2075,7 @@ function openQuickLog(customerId, editId){
     <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="log-save">${ex ? "儲存修改" : "儲存"}</button></div>
   `);
   if (!c) wireCustomerPicker("log-pick", null);
+  wireDateSeg("log-date");
   document.getElementById("log-save").addEventListener("click", () => {
     const target = c ? c.id : (document.getElementById("log-pick") || {}).value;
     if (!target){ alert("請先選一位對象。"); return; }
@@ -2034,7 +2120,7 @@ function openPurchase(customerId, kind, editKey){
 
   openSheet(editing ? (trial ? "修改這筆體驗" : "修改這筆購買") : (trial ? "記一筆體驗" : "記一筆購買"), `
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("buy-pick", null)}
-    <label>日期</label><input type="date" id="buy-date" value="${editing ? esc(first.date) : todayStr()}">
+    <label>日期</label>${dateSegHTML("buy-date", editing ? first.date : todayStr())}
 
     <label>從商品目錄選（點一下加入這張單）</label>
     <input type="search" id="buy-cat-q" placeholder="輸入關鍵字找商品…" autocomplete="off">
@@ -2047,20 +2133,26 @@ function openPurchase(customerId, kind, editKey){
     <label>${trial ? "體驗了哪些產品" : "這張單的品項"}</label>
     <div id="buy-lines"></div>
 
-    ${trial ? `
-      <label>反應／回饋（選填）</label>
-      <textarea id="buy-reaction" rows="2" placeholder="例：膚觸有感，想再試一次；覺得味道太重">${editing ? esc(first.reaction || "") : ""}</textarea>
-      ${editing ? "" : `<label>幾天後回訪（選填，會排進待辦）</label>
-      <input type="text" id="buy-followup" inputmode="numeric" placeholder="例：7（給 7 天份，一週後問感想）">`}
-    ` : `
-      <label>回購週期（選填，天數；消耗品填了會自動提醒）</label>
-      <input type="text" id="buy-cycle" inputmode="numeric" placeholder="例：30（一個月用完）"
-        value="${editing && first.cycle ? first.cycle : ""}">
-    `}
-    <label>備註（選填）</label><textarea id="buy-note" rows="2" placeholder="${trial ? "例：在她家客廳體驗、朋友一起試" : "例：分期付款、幫親戚一起買"}">${editing ? esc(first.note || "") : ""}</textarea>
+    <details class="fold"${(editing && (first.cycle || first.note || first.reaction)) ? " open" : ""}>
+      <summary>${trial ? "反應、回訪與備註" : "回購週期與備註"} <span class="muted">選填</span></summary>
+      <div>
+      ${trial ? `
+        <label>反應／回饋</label>
+        <textarea id="buy-reaction" rows="2" placeholder="例：膚觸有感，想再試一次；覺得味道太重">${editing ? esc(first.reaction || "") : ""}</textarea>
+        ${editing ? "" : `<label>幾天後回訪（會排進待辦）</label>
+        <input type="text" id="buy-followup" inputmode="numeric" placeholder="例：7（給 7 天份，一週後問感想）">`}
+      ` : `
+        <label>回購週期（天數；消耗品填了會自動提醒）</label>
+        <input type="text" id="buy-cycle" inputmode="numeric" placeholder="例：30（一個月用完）"
+          value="${editing && first.cycle ? first.cycle : ""}">
+      `}
+      <label>備註</label><textarea id="buy-note" rows="2" placeholder="${trial ? "例：在她家客廳體驗、朋友一起試" : "例：分期付款、幫親戚一起買"}">${editing ? esc(first.note || "") : ""}</textarea>
+      </div>
+    </details>
     <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="buy-save">${editing ? "儲存修改" : "儲存"}</button></div>
   `);
   if (!c) wireCustomerPicker("buy-pick", null);
+  wireDateSeg("buy-date");
 
   const linesBox = document.getElementById("buy-lines");
   const renderLines = () => {
