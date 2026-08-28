@@ -339,6 +339,23 @@ details.gfold > div{padding-bottom:4px;}
 .hero .val{font-size:28px; font-weight:700; letter-spacing:-.01em; margin-top:2px; font-variant-numeric:tabular-nums;}
 .hero .sub{font-size:12.5px; color:var(--ink-soft); margin-top:3px;}
 .grouplab{font-size:12px; font-weight:700; letter-spacing:.1em; color:var(--ink-soft); margin:2px 0 8px;}
+details.detfold{border:0; border-top:1px solid var(--line); border-radius:0; padding:0; margin:0;}
+details.detfold > summary{
+  padding:13px 2px; font-size:15px; font-weight:600; letter-spacing:.01em;
+  list-style:none; cursor:pointer; display:flex; align-items:baseline; gap:8px;
+}
+details.detfold > summary::-webkit-details-marker{display:none;}
+details.detfold > summary .n{font-weight:400; color:var(--ink-soft); font-size:13px;}
+details.detfold > summary::after{content:"▾"; margin-left:auto; color:var(--ink-soft); font-size:12px;}
+details.detfold[open] > summary::after{content:"▴";}
+details.detfold > div{padding:0 0 14px;}
+.qcontact{display:flex; gap:10px; margin-top:12px;}
+.qcontact a{
+  flex:1 1 0; text-align:center; padding:11px 6px; border:1px solid var(--card-line);
+  border-radius:var(--r-btn); background:var(--card); color:var(--accent);
+  font-size:15px; font-weight:600; text-decoration:none;
+}
+.qcontact a:active{background:var(--accent-soft);}
 
 /* ===== 業績分頁 ===== */
 .cardtitle{font-weight:700; margin-bottom:8px; display:flex; align-items:baseline; gap:8px;}
@@ -1792,12 +1809,49 @@ function openDetail(id){
   const trials = trialsOf(id);
   const spent = spentOf(id);
   const fields = [
-    ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--accent)">${esc(c.phone)}</a>` : ""],
-    ["LINE", c.lineId ? `<a href="https://line.me/ti/p/~${encodeURIComponent(c.lineId)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(c.lineId)}</a>` : ""],
+    ["電話", esc(c.phone)],
+    ["LINE", esc(c.lineId)],
     ["生日", c.birthday ? esc(c.birthday) + (birthdayInDays(c, 30) !== null ? `　<b>${birthdayInDays(c, 30) === 0 ? "就是今天" : birthdayInDays(c, 30) + " 天後"}</b>` : "") : ""],
     ["公司／職業", esc(c.company)],
     ["怎麼認識的", esc(c.source)],
   ].filter(f => f[1]);
+
+  const ts = tasksOf(id);
+  const up = uplineOf(id), downs = downlinesOf(id), orgSz = orgSize(id);
+  const hasOrg = !!(up || downs.length || isPartner(c));
+  // 同一張單（orderId）的多個品項歸在一起；舊資料沒有 orderId，各自成一單
+  const groupOrders = rows => {
+    const out = [], by = {};
+    rows.forEach(x => {
+      const k = x.orderId || ("_solo_" + x.id);
+      if (!by[k]){ by[k] = {key:k, date:x.date, note:x.note, reaction:x.reaction, items:[]}; out.push(by[k]); }
+      by[k].items.push(x);
+    });
+    return out;
+  };
+  const orders = groupOrders(buys), trialGroups = groupOrders(trials);
+  const orderHTML = (o, trial) => {
+    const sum = o.items.reduce((t, x) => t + (Number(x.amount) || 0), 0);
+    const sumSv = o.items.reduce((t, x) => t + (Number(x.sv) || 0), 0);
+    // .txt 是 white-space:pre-wrap，模板裡的換行縮排會原樣渲染成一大片空白，
+    // 所以內容先拼成單一字串再塞進去
+    const lines = o.items.map(x =>
+      `<div><b>${esc(x.item)}</b>${(x.qty && x.qty > 1) ? ` ×${x.qty}` : ""}${
+        !trial && Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${
+        !trial && Number(x.sv) ? "　SV " + Math.round(x.sv) : ""}</div>`).join("")
+      + ((!trial && o.items.length > 1) ? `<div class="muted" style="margin-top:2px;">合計 ${money(sum)}${sumSv ? "・SV " + Math.round(sumSv) : ""}</div>` : "")
+      + ((trial && o.reaction) ? `<div class="muted" style="margin-top:2px;">反應：${esc(o.reaction)}</div>` : "")
+      + (o.note ? `<div class="muted" style="margin-top:2px;">${esc(o.note)}</div>` : "");
+    return `<div class="ilog"${trial ? ` style="border-left-color:${partnerColor()};"` : ""}>`
+      + `<span class="when">${esc(o.date)}</span>`
+      + `<button class="btn small ghost" data-delorder="${esc(o.key)}" style="float:right;">刪</button>`
+      + `<button class="btn small ghost" data-editorder="${esc(o.key)}" style="float:right; color:var(--ink-soft);">改</button>`
+      + `<div class="txt">${lines}</div></div>`;
+  };
+  /* 往來多年的客戶，全部攤開要捲很久；分段收起來，摘要行先講重點 */
+  const fold = (title, meta, body, open) => `<details class="detfold"${open ? " open" : ""}>
+    <summary>${title}${meta ? `<span class="n">${esc(meta)}</span>` : ""}</summary>
+    <div>${body}</div></details>`;
 
   openSheet(c.name, `
     <div>
@@ -1805,27 +1859,13 @@ function openDetail(id){
       ${isPartner(c) ? `<span class="chip" style="background:${partnerColor()};color:#fff;">${esc(ROLES[roleOf(c)].label)}</span>` : ""}
       ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
     </div>
-    ${(() => {
-      const up = uplineOf(id), downs = downlinesOf(id), sz = orgSize(id);
-      if (!up && !downs.length && !isPartner(c)) return "";
-      const upc = up ? getCustomer(up) : null;
-      const os = orgSpend(id);
-      return `<div class="card" style="margin-top:12px;">
-        <div style="font-weight:700; margin-bottom:6px;">組織</div>
-        <div class="muted">第 ${generationOf(id)} 代　直屬下線 ${downs.length} 人　整條線 ${sz} 人</div>
-        <div class="muted">上線：${upc ? `<span data-open="${esc(upc.id)}" style="color:var(--accent);cursor:pointer;">${esc(upc.name)}</span>` : "無（最上層）"}</div>
-        ${os ? `<div class="muted">組織業績累計 ${money(os)}（本人 ${money(spentOf(id))}）</div>` : ""}
-        ${downs.length ? `<div style="margin-top:6px;">${downs.map(d => {
-          const dc = getCustomer(d);
-          return dc ? `<span class="chip tag" data-open="${esc(d)}" style="cursor:pointer;">${esc(dc.name)}${orgSize(d) ? "（+" + orgSize(d) + "）" : ""}</span>` : "";
-        }).join("")}</div>` : ""}
-      </div>`;
-    })()}
-    ${fields.map(f => `<div style="margin-top:8px;"><span class="muted">${f[0]}</span>　${f[1]}</div>`).join("")}
-    ${c.preference ? `<div style="margin-top:10px;"><span class="muted">偏好／需求</span>
-      <div class="card" style="margin-top:4px; white-space:pre-wrap;">${esc(c.preference)}</div></div>` : ""}
-    ${c.note ? `<div class="card" style="margin-top:12px; white-space:pre-wrap;">${esc(c.note)}</div>` : ""}
-    <div class="row" style="margin-top:14px;">
+
+    ${(c.phone || c.lineId) ? `<div class="qcontact">
+      ${c.phone ? `<a href="tel:${esc(c.phone)}">撥電話</a>` : ""}
+      ${c.lineId ? `<a href="https://line.me/ti/p/~${encodeURIComponent(c.lineId)}" target="_blank" rel="noopener">LINE</a>` : ""}
+    </div>` : ""}
+
+    <div class="row" style="margin-top:12px;">
       <button class="btn primary grow" id="d-log">記互動</button>
       <button class="btn grow" id="d-buy">記購買</button>
       <button class="btn grow" id="d-trial">記體驗</button>
@@ -1835,77 +1875,56 @@ function openDetail(id){
       <button class="btn grow" id="d-edit">編輯</button>
     </div>
 
-    ${(() => {
-      const ts = tasksOf(id);
-      return ts.length ? `<h2>待辦（${ts.length}）</h2>` + ts.map(t => {
+    ${c.preference ? `<div style="margin-top:14px;"><span class="muted">偏好／需求</span>
+      <div class="card" style="margin-top:4px; margin-bottom:0; white-space:pre-wrap;">${esc(c.preference)}</div></div>` : ""}
+    ${c.note ? `<div class="card" style="margin-top:12px; margin-bottom:0; white-space:pre-wrap;">${esc(c.note)}</div>` : ""}
+
+    <div style="margin-top:16px;">
+    ${ts.length ? fold("待辦", ts.length + " 件", ts.map(t => {
         const d = daysUntil(t.due);
         return `<div class="row" style="margin-bottom:8px;">
           <button class="btn small" data-donetask="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
           <span class="grow">${esc(t.text)}</span>
           <span class="muted">${esc(t.due)}${d < 0 ? "（逾期）" : d === 0 ? "（今天）" : ""}</span></div>`;
-      }).join("") : "";
-    })()}
+      }).join(""), true) : ""}
 
-    ${(() => {
-      // 同一張單（orderId）的多個品項歸在一起；舊資料沒有 orderId，各自成一單
-      const orders = [];
-      const byOrder = {};
-      buys.forEach(x => {
-        const k = x.orderId || ("_solo_" + x.id);
-        if (!byOrder[k]){ byOrder[k] = {key:k, date:x.date, note:x.note, items:[]}; orders.push(byOrder[k]); }
-        byOrder[k].items.push(x);
-      });
-      const orderHTML = o => {
-        const sum = o.items.reduce((t, x) => t + (Number(x.amount) || 0), 0);
-        const sumSv = o.items.reduce((t, x) => t + (Number(x.sv) || 0), 0);
-        const multi = o.items.length > 1;
-        return `<div class="ilog"><span class="when">${esc(o.date)}</span>
-          <button class="btn small ghost" data-delorder="${esc(o.key)}" style="float:right;">刪</button>
-          <button class="btn small ghost" data-editorder="${esc(o.key)}" style="float:right; color:var(--ink-soft);">改</button>
-          <div class="txt">${o.items.map(x =>
-            `<div><b>${esc(x.item)}</b>${(x.qty && x.qty > 1) ? ` ×${x.qty}` : ""}${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${Number(x.sv) ? "　SV " + Math.round(x.sv) : ""}</div>`).join("")}
-          ${multi ? `<div class="muted" style="margin-top:2px;">合計 ${money(sum)}${sumSv ? "・SV " + Math.round(sumSv) : ""}</div>` : ""}
-          ${o.note ? esc(o.note) : ""}</div></div>`;
-      };
-      return `<h2>購買紀錄（${orders.length} 單／${buys.length} 項）${spent ? "　累計 " + money(spent) : ""}</h2>
-        <div>${orders.length ? orders.map(orderHTML).join("") : `<div class="muted">還沒有購買紀錄。</div>`}</div>`;
-    })()}
+    ${fold("購買紀錄",
+      orders.length ? `${orders.length} 單／${buys.length} 項${spent ? "・累計 " + money(spent) : ""}` : "還沒有",
+      orders.length ? orders.map(o => orderHTML(o, false)).join("") : `<div class="muted">還沒有購買紀錄。</div>`,
+      orders.length > 0)}
 
-    ${(() => {
-      if (!trials.length) return "";
-      const groups = [], byO = {};
-      trials.forEach(x => {
-        const k = x.orderId || ("_solo_" + x.id);
-        if (!byO[k]){ byO[k] = {key:k, date:x.date, note:x.note, reaction:x.reaction, items:[]}; groups.push(byO[k]); }
-        byO[k].items.push(x);
-      });
-      return `<h2>體驗紀錄（${groups.length} 次／${trials.length} 項）</h2>
-        <div>${groups.map(o => `<div class="ilog" style="border-left-color:#1f6f8b;">
-          <span class="when">${esc(o.date)}</span>
-          <button class="btn small ghost" data-delorder="${esc(o.key)}" style="float:right;">刪</button>
-          <button class="btn small ghost" data-editorder="${esc(o.key)}" style="float:right; color:var(--ink-soft);">改</button>
-          <div class="txt">${o.items.map(x =>
-            `<div><b>${esc(x.item)}</b>${(x.qty && x.qty > 1) ? ` ×${x.qty}` : ""}</div>`).join("")}
-          ${o.reaction ? `<div class="muted" style="margin-top:2px;">反應：${esc(o.reaction)}</div>` : ""}
-          ${o.note ? esc(o.note) : ""}</div></div>`).join("")}</div>`;
-    })()}
+    ${trialGroups.length ? fold("體驗紀錄", `${trialGroups.length} 次／${trials.length} 項`,
+      trialGroups.map(o => orderHTML(o, true)).join(""), false) : ""}
 
-    <h2>關係（${rels.length}）</h2>
-    <div id="d-rels">${rels.length ? rels.map(r => {
-      const L = relationLabel(r, id);
-      return `<div class="row" style="margin-bottom:6px;">
-        <span class="grow" data-open="${esc(L.otherId)}" style="cursor:pointer;">
-          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${L.color};margin-right:6px;"></span>${esc(L.text)}</span>
-        <button class="btn small" data-delrel="${esc(r.id)}">刪</button></div>`;
-    }).join("") : `<div class="muted">還沒有連任何人。</div>`}</div>
+    ${fold("互動紀錄", logs.length ? `${logs.length} 筆・最近 ${logs[0].date}` : "還沒有",
+      logs.length ? logs.map(i =>
+        `<div class="ilog"><span class="when">${esc(i.date)}</span>
+         <button class="btn small ghost" data-dellog="${esc(i.id)}" style="float:right;">刪</button>
+         <button class="btn small ghost" data-editlog="${esc(i.id)}" style="float:right; color:var(--ink-soft);">改</button>
+         <div class="txt">${esc(i.text)}</div></div>`).join("")
+        : `<div class="muted">還沒有互動紀錄。</div>`, false)}
 
-    <h2>互動紀錄（${logs.length}）</h2>
-    <div>${logs.length ? logs.map(i =>
-      `<div class="ilog"><span class="when">${esc(i.date)}</span>
-       <button class="btn small ghost" data-dellog="${esc(i.id)}" style="float:right;">刪</button>
-       <button class="btn small ghost" data-editlog="${esc(i.id)}" style="float:right; color:var(--ink-soft);">改</button>
-       <div class="txt">${esc(i.text)}</div></div>`).join("")
-      : `<div class="muted">還沒有互動紀錄。</div>`}</div>
+    ${fold("關係", rels.length ? rels.length + " 條" : "還沒有",
+      `<div id="d-rels">${rels.length ? rels.map(r => {
+        const L = relationLabel(r, id);
+        return `<div class="row" style="margin-bottom:6px;">
+          <span class="grow" data-open="${esc(L.otherId)}" style="cursor:pointer;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${L.color};margin-right:6px;"></span>${esc(L.text)}</span>
+          <button class="btn small" data-delrel="${esc(r.id)}">刪</button></div>`;
+      }).join("") : `<div class="muted">還沒有連任何人。</div>`}</div>`, false)}
+
+    ${hasOrg ? fold("組織",
+      `第 ${generationOf(id)} 代・直屬 ${downs.length} 人・整條線 ${orgSz} 人`,
+      `<div class="muted">上線：${up && getCustomer(up) ? `<span data-open="${esc(up)}" style="color:var(--accent);cursor:pointer;">${esc(getCustomer(up).name)}</span>` : "無（最上層）"}</div>
+       ${orgSpend(id) ? `<div class="muted" style="margin-top:4px;">組織業績累計 ${money(orgSpend(id))}（本人 ${money(spent)}）</div>` : ""}
+       ${downs.length ? `<div style="margin-top:8px;">${downs.map(d => {
+         const dc = getCustomer(d);
+         return dc ? `<span class="chip tag" data-open="${esc(d)}" style="cursor:pointer;">${esc(dc.name)}${orgSize(d) ? "（+" + orgSize(d) + "）" : ""}</span>` : "";
+       }).join("")}</div>` : ""}`, false) : ""}
+
+    ${fields.length ? fold("基本資料", fields.map(f => f[0]).join("・"),
+      fields.map(f => `<div style="margin-bottom:8px;"><span class="muted">${f[0]}</span>　${f[1]}</div>`).join(""), false) : ""}
+    </div>
 
     <div style="margin-top:22px; text-align:center;">
       <button class="btn ghost" id="d-delete" style="color:var(--danger);">刪除這位客戶</button>
