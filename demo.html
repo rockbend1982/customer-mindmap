@@ -218,14 +218,17 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
 .slabel{
   fill:var(--ink-soft); font-weight:500; text-anchor:middle; pointer-events:none;
   paint-order:stroke; stroke:var(--paper); stroke-width:3px; stroke-linejoin:round;
+  vector-effect:non-scaling-stroke;
 }
 .nlabel{
   fill:var(--ink); font-weight:600; text-anchor:middle; pointer-events:none;
   paint-order:stroke; stroke:var(--paper); stroke-width:3.5px; stroke-linejoin:round;
+  vector-effect:non-scaling-stroke;
 }
 .elabel{
   font-weight:600; text-anchor:middle; pointer-events:none;
-  paint-order:stroke; stroke:#ffffff; stroke-width:3.5px; stroke-linejoin:round;
+  paint-order:stroke; stroke:var(--paper); stroke-width:3.5px; stroke-linejoin:round;
+  vector-effect:non-scaling-stroke;
 }
 .gnode.hit circle{stroke:var(--ink); stroke-width:4;}
 </style>
@@ -992,17 +995,72 @@ function renderHomeToday(){
   });
 
   items.sort((a, b) => a.sort - b.sort);
-  const upcoming = openTasks().filter(t => daysUntil(t.due) > 0).length;
+  // 未來 7 天預覽：一眼看到接下來幾天的量，不用切視圖
+  const ahead = openTasks().map(t => ({t, d: daysUntil(t.due)})).filter(x => x.d > 0 && x.d <= 7);
+  const dayName = d => d === 1 ? "明天" : d === 2 ? "後天" : d + " 天後";
+  const grouped = {};
+  ahead.forEach(x => { grouped[x.d] = (grouped[x.d] || 0) + 1; });
+  const laterCount = openTasks().filter(t => daysUntil(t.due) > 7).length;
+  const preview = Object.keys(grouped).map(Number).sort((a, b) => a - b)
+    .map(d => `${dayName(d)} ${grouped[d]} 件`).join("・");
+  const aheadLine = (preview || laterCount)
+    ? `<hr class="card-divider"><div class="muted">接下來：${esc(preview || "7 天內沒有待辦")}` +
+      (laterCount ? `　<span style="opacity:.75;">更遠還有 ${laterCount} 件</span>` : "") + `</div>`
+    : "";
+
+  const allCount = openTasks().length;
+  const titleRow = n => `<div class="row" style="align-items:baseline;">
+    <span class="card-title grow" style="margin:0 0 10px;">今天要做的事${n ? "（" + n + "）" : ""}</span>
+    ${allCount ? `<button class="btn small" id="open-all-tasks">全部 ${allCount}</button>` : ""}</div>`;
   box.innerHTML = items.length
-    ? `<div class="card"><div class="card-title">今天要做的事（${items.length}）</div>${items.map(x => x.html).join("")}
-       ${upcoming ? `<div class="muted" style="margin-top:4px;">另有 ${upcoming} 件待辦排在後面</div>` : ""}</div>`
-    : (upcoming ? `<div class="card"><div class="card-title">今天要做的事</div>
-        <div class="muted">今天沒有待辦，還有 ${upcoming} 件排在後面。</div></div>` : "");
+    ? `<div class="card">${titleRow(items.length)}${items.map(x => x.html).join("")}${aheadLine}</div>`
+    : ((aheadLine || allCount) ? `<div class="card">${titleRow(0)}
+        <div class="muted">今天沒有待辦。</div>${aheadLine}</div>` : "");
+  const allBtn = document.getElementById("open-all-tasks");
+  if (allBtn) allBtn.addEventListener("click", openAllTasks);
 
   box.querySelectorAll("[data-donetask]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     const t = DB.tasks.find(x => x.id === b.dataset.donetask);
     if (t){ t.done = true; t.doneAt = Date.now(); save(); renderHome(); }
+  }));
+}
+
+function openAllTasks(){
+  const list = openTasks();
+  const done = DB.tasks.filter(t => t.done)
+    .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).slice(0, 10);
+  const row = t => {
+    const c = getCustomer(t.customerId);
+    const d = daysUntil(t.due);
+    const when = d < 0 ? `逾期 ${-d} 天` : d === 0 ? "今天" : d === 1 ? "明天" : `${d} 天後`;
+    return `<div class="row" style="margin-bottom:10px; align-items:center;">
+      <button class="btn small" data-donetask3="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
+      <span class="grow" data-open="${esc(t.customerId)}" style="cursor:pointer;">
+        <b>${esc(c ? c.name : "（已刪除）")}</b>　${esc(t.text)}
+        <div class="muted" style="font-size:12px;">${esc(t.due)}</div></span>
+      <span class="muted" style="white-space:nowrap;">${esc(when)}</span></div>`;
+  };
+  openSheet("所有待辦", `
+    ${list.length ? `<div class="card-title">未完成（${list.length}）</div>${list.map(row).join("")}`
+      : `<div class="empty">目前沒有未完成的待辦。<br>記互動時可以順手填「下次跟進」。</div>`}
+    ${done.length ? `<h2>最近完成（${done.length}）</h2>` + done.map(t => {
+      const c = getCustomer(t.customerId);
+      return `<div class="row" style="margin-bottom:8px; opacity:.65;">
+        <span class="grow" data-open="${esc(t.customerId)}" style="cursor:pointer;">
+          <b>${esc(c ? c.name : "（已刪除）")}</b>　${esc(t.text)}</span>
+        <button class="btn small" data-undotask="${esc(t.id)}" style="flex:0 0 auto;">還原</button></div>`;
+    }).join("") : ""}
+  `);
+  document.querySelectorAll("[data-donetask3]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    const t = DB.tasks.find(x => x.id === b.dataset.donetask3);
+    if (t){ t.done = true; t.doneAt = Date.now(); save(); openAllTasks(); }
+  }));
+  document.querySelectorAll("[data-undotask]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    const t = DB.tasks.find(x => x.id === b.dataset.undotask);
+    if (t){ t.done = false; delete t.doneAt; save(); openAllTasks(); }
   }));
 }
 
@@ -2016,11 +2074,31 @@ function renderGraph(){
     if (r.from > r.to) off = -off;
     const nx = -dy / d, ny = dx / d;
     const cx = (x1 + x2) / 2 + nx * off * 2, cy = (y1 + y2) / 2 + ny * off * 2;
-    const lx = 0.25 * (x1 + x2) + 0.5 * cx, ly = 0.25 * (y1 + y2) + 0.5 * cy;
     const dim = fset && !(fset.has(r.from) && fset.has(r.to));
     const ls = Math.min(60, 10.5 / Math.max(gview.s, 0.12));
-    // 線太短就不標文字：擠在一起會壓到姓名，型別仍可由顏色與圖例判讀
-    const room = (d - R * 2) * gview.s > 46 || !!off;
+
+    // 同一對人有多條關係時，標籤沿線錯開，不要全部疊在中點
+    const nInPair = grp.length;
+    const tPos = nInPair > 1
+      ? 0.5 + (grp.indexOf(r) - (nInPair - 1) / 2) * 0.26
+      : 0.5;
+    const bez = t2 => {
+      const u = 1 - t2;
+      return {x: u*u*x1 + 2*u*t2*cx + t2*t2*x2, y: u*u*y1 + 2*u*t2*cy + t2*t2*y2};
+    };
+    const lp = bez(Math.min(0.82, Math.max(0.18, tPos)));
+    // 標籤側移避開姓名：量用螢幕像素（否則縮放後幾乎沒挪到），方向一律往上
+    // ——姓名固定畫在圓的下方，往上就必然是遠離姓名的那一側
+    let sx = nx, sy = ny;
+    if (sy > 0){ sx = -sx; sy = -sy; }
+    const sidePx = off ? 0 : 15 / Math.max(gview.s, 0.12);
+    const lx = lp.x + sx * sidePx, ly = lp.y + sy * sidePx;
+
+    // 空間夠不夠要用「標籤實際寬度」判斷，不能只看線長門檻：
+    // 舊版對多重關係開例外強制顯示，短邊上兩個標籤會互相壓、還蓋住姓名
+    const labelPx = t.label.length * ls * gview.s * 0.62;   // 標籤螢幕寬度估算
+    const edgePx = (d - R * 2) * gview.s;                    // 可見線段螢幕長度
+    const room = edgePx > Math.max(40, labelPx * (nInPair > 1 ? 1.9 : 1.25));
     return `<g class="gedge ${dim ? "dim" : ""}">
       <path d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
         stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
