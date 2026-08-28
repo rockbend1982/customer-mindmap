@@ -456,7 +456,9 @@ function emptyDB(){
 function migrate(d){
   const base = emptyDB();
   if (!d || typeof d !== "object" || !Array.isArray(d.customers)) throw new Error("格式不正確");
-  base.customers = d.customers || [];
+  base.customers = (d.customers || []).filter(c =>
+    c && typeof c === "object" && typeof c.id === "string" && c.id &&
+    typeof c.name === "string" && c.name);
   base.relations = d.relations || [];
   base.interactions = d.interactions || [];
   base.purchases = d.purchases || [];
@@ -602,7 +604,7 @@ function personRowHTML(c){
   const tagTxt = (c.tags || []).slice(0, 2).map(t => "#" + t).join(" ") +
     ((c.tags || []).length > 2 ? " …" : "");
   const meta = [c.company, tagTxt].filter(Boolean).join("・") || "尚無備註資料";
-  return `<div class="person" data-open="${c.id}">
+  return `<div class="person" data-open="${esc(c.id)}">
     <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
     <div class="info">
       <div class="name-row">
@@ -643,7 +645,7 @@ function renderHome(){
   } else {
     rb.innerHTML = `<div class="card"><div class="card-title">最近互動</div>` + recent.map(i => {
       const c = getCustomer(i.customerId);
-      return `<div class="ilog" data-open="${i.customerId}">
+      return `<div class="ilog" data-open="${esc(i.customerId)}">
         <span class="who">${esc(c ? c.name : "（已刪除）")}</span> <span class="when">${esc(i.date)}</span>
         <div class="txt">${esc(i.text)}</div></div>`;
     }).join("") + `</div>`;
@@ -672,7 +674,7 @@ function renderHomeInsights(){
     .sort((x, y) => (y.d.days == null ? 1e9 : y.d.days) - (x.d.days == null ? 1e9 : x.d.days))[0];
   const line = (label, html) =>
     `<div class="row" style="margin-bottom:9px; align-items:baseline;"><span class="muted" style="flex:0 0 6.5em;">${label}</span><span class="grow">${html}</span></div>`;
-  const nameLink = c => `<span data-open="${c.id}" style="font-weight:600; cursor:pointer;">${esc(c.name)}</span>`;
+  const nameLink = c => `<span data-open="${esc(c.id)}" style="font-weight:600; cursor:pointer;">${esc(c.name)}</span>`;
   const spender = DB.customers.map(c => ({c, v: spentOf(c.id)})).filter(x => x.v > 0)
     .sort((a, b) => b.v - a.v)[0];
   const lastBuy = DB.purchases.slice()
@@ -719,7 +721,7 @@ function renderHomeInsights(){
   dbox.innerHTML = dorm.length
     ? `<div class="card"><div class="card-title">該聯絡了（超過 ${dormantLimit()} 天，共 ${dorm.length} 位）</div>` +
       dorm.slice(0, 5).map(x => `<div class="row" style="margin-bottom:9px;">
-        <span class="grow" data-open="${x.c.id}" style="cursor:pointer;"><b>${esc(x.c.name)}</b>
+        <span class="grow" data-open="${esc(x.c.id)}" style="cursor:pointer;"><b>${esc(x.c.name)}</b>
           <span class="chip warmth-${x.c.warmth}" style="margin:0 0 0 4px;">${esc(warmthLabel(x.c.warmth))}</span></span>
         <span class="muted">${x.d.days == null ? "從未互動" : x.d.days + " 天"}</span></div>`).join("") + `</div>`
     : "";
@@ -818,11 +820,11 @@ function openDetail(id){
       return `<div class="card" style="margin-top:12px;">
         <div style="font-weight:700; margin-bottom:6px;">組織</div>
         <div class="muted">第 ${generationOf(id)} 代　直屬下線 ${downs.length} 人　整條線 ${sz} 人</div>
-        <div class="muted">上線：${upc ? `<span data-open="${upc.id}" style="color:var(--brand-red);cursor:pointer;">${esc(upc.name)}</span>` : "無（最上層）"}</div>
+        <div class="muted">上線：${upc ? `<span data-open="${esc(upc.id)}" style="color:var(--brand-red);cursor:pointer;">${esc(upc.name)}</span>` : "無（最上層）"}</div>
         ${os ? `<div class="muted">組織業績累計 ${money(os)}（本人 ${money(spentOf(id))}）</div>` : ""}
         ${downs.length ? `<div style="margin-top:6px;">${downs.map(d => {
           const dc = getCustomer(d);
-          return dc ? `<span class="chip tag" data-open="${d}" style="cursor:pointer;">${esc(dc.name)}${orgSize(d) ? "（+" + orgSize(d) + "）" : ""}</span>` : "";
+          return dc ? `<span class="chip tag" data-open="${esc(d)}" style="cursor:pointer;">${esc(dc.name)}${orgSize(d) ? "（+" + orgSize(d) + "）" : ""}</span>` : "";
         }).join("")}</div>` : ""}
       </div>`;
     })()}
@@ -842,7 +844,7 @@ function openDetail(id){
     <h2>購買紀錄（${buys.length}）${spent ? "　累計 " + money(spent) : ""}</h2>
     <div>${buys.length ? buys.map(x =>
       `<div class="ilog"><span class="when">${esc(x.date)}</span>
-       <button class="btn small ghost" data-delbuy="${x.id}" style="float:right;">刪</button>
+       <button class="btn small ghost" data-delbuy="${esc(x.id)}" style="float:right;">刪</button>
        <div class="txt"><b>${esc(x.item)}</b>${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${x.note ? "\n" + esc(x.note) : ""}</div></div>`).join("")
       : `<div class="muted">還沒有購買紀錄。</div>`}</div>
 
@@ -850,15 +852,15 @@ function openDetail(id){
     <div id="d-rels">${rels.length ? rels.map(r => {
       const L = relationLabel(r, id);
       return `<div class="row" style="margin-bottom:6px;">
-        <span class="grow" data-open="${L.otherId}" style="cursor:pointer;">
+        <span class="grow" data-open="${esc(L.otherId)}" style="cursor:pointer;">
           <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${L.color};margin-right:6px;"></span>${esc(L.text)}</span>
-        <button class="btn small" data-delrel="${r.id}">刪</button></div>`;
+        <button class="btn small" data-delrel="${esc(r.id)}">刪</button></div>`;
     }).join("") : `<div class="muted">還沒有連任何人。</div>`}</div>
 
     <h2>互動紀錄（${logs.length}）</h2>
     <div>${logs.length ? logs.map(i =>
       `<div class="ilog"><span class="when">${esc(i.date)}</span>
-       <button class="btn small ghost" data-dellog="${i.id}" style="float:right;">刪</button>
+       <button class="btn small ghost" data-dellog="${esc(i.id)}" style="float:right;">刪</button>
        <div class="txt">${esc(i.text)}</div></div>`).join("")
       : `<div class="muted">還沒有互動紀錄。</div>`}</div>
 
@@ -881,6 +883,7 @@ function openDetail(id){
   });
   document.querySelectorAll("[data-delrel]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
+    if (!confirm("刪除這條關係？")) return;
     DB.relations = DB.relations.filter(r => r.id !== b.dataset.delrel);
     save(); openDetail(id);
   }));
@@ -1484,6 +1487,7 @@ function groupHullsSVG(vis){
 
 /* 內容實際範圍：含節點姓名與群名文字所佔空間（文字字級隨縮放反向變動，故需指定 s） */
 function orgSubLabel(c){
+  if (c.subLabel) return c.subLabel;
   const dn = downlinesOf(c.id).length, sz = orgSize(c.id), os = orgSpend(c.id);
   const bits = [`直屬 ${dn}`];
   if (sz > dn) bits.push(`線上 ${sz}`);
@@ -1533,14 +1537,29 @@ function renderGraph(){
   }
   const visSet = new Set(vis.map(c => c.id));
   let rels = DB.relations.filter(r => visSet.has(r.from) && visSet.has(r.to));
+  let me = null;
   if (TREE_REL[gMode]){
     rels = rels.filter(r => r.type === TREE_REL[gMode]);
-    gIntroPos = layoutIntroTree(vis, rels);
+    if (gMode === "org" && vis.length){
+      // 以使用者為重心：虛擬「我」節點當整棵組織樹的根，沒有上線的夥伴掛在我底下
+      const hasUp = new Set(rels.map(r => r.to));
+      const roots = vis.filter(c => !hasUp.has(c.id));
+      const total = vis.reduce((t, c) => t + spentOf(c.id), 0);
+      me = {id:"__me__", name:"我", subLabel:
+        `直屬 ${roots.length}・線上 ${vis.length}` + (total ? "・" + money(total).replace("NT$ ", "$") : "")};
+      rels = rels.concat(roots.map((c, i) => ({id:"__mer" + i, from:"__me__", to:c.id, type:"upline", createdAt:0})));
+      gIntroPos = layoutIntroTree([me].concat(vis), rels);
+    } else {
+      gIntroPos = layoutIntroTree(vis, rels);
+    }
   } else {
     ensurePositions();
   }
+  const drawList = me ? [me].concat(vis) : vis;
+  const byId = {};
+  drawList.forEach(c => byId[c.id] = c);
   const fset = focusSetOf(rels);
-  if (!gview.inited){ fitViewTo(vis); gview.inited = true; }
+  if (!gview.inited){ fitViewTo(drawList); gview.inited = true; }
 
   const R = 27;
   const defs = `<defs>
@@ -1555,7 +1574,7 @@ function renderGraph(){
   Object.values(pairGroups).forEach(g => g.sort((a, b) => a.id.localeCompare(b.id)));
 
   const edges = rels.map(r => {
-    const a = getCustomer(r.from), b = getCustomer(r.to);
+    const a = byId[r.from], b = byId[r.to];
     if (!a || !b) return "";
     const pa = nodePos(a), pb = nodePos(b);
     const t = relType(r.type);
@@ -1581,20 +1600,21 @@ function renderGraph(){
     </g>`;
   }).join("");
 
-  const nodes = vis.map(c => {
+  const nodes = drawList.map(c => {
+    const isMe = c.id === "__me__";
     const pt = nodePos(c);
-    const wc = warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
+    const wc = isMe ? "#252525" : warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
     const dim = fset && !fset.has(c.id);
-    const sleep = !dim && dormantInfo(c.id).dormant;
-    const hit = gFocus === c.id;
+    const sleep = !isMe && !dim && dormantInfo(c.id).dormant;
+    const hit = !isMe && gFocus === c.id;
     // 姓名一律畫在圓下方（反向縮放，螢幕字級恆定），圓本身只當熟度色點，不再重複放字
     const ns = Math.min(72, 12 / Math.max(gview.s, 0.12));
-    const partner = isPartner(c);
+    const partner = !isMe && isPartner(c);
     const subTxt = gMode === "org" ? orgSubLabel(c) : "";
     const sub = subTxt
       ? `<text class="slabel" y="${R + ns * 2.35}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
-    return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${pt.x},${pt.y})">
+    return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" ${isMe ? "" : `data-nid="${esc(c.id)}"`} transform="translate(${pt.x},${pt.y})">
       ${partner ? `<circle r="${R + 5}" fill="none" stroke="${partnerColor()}" stroke-width="2.5" opacity="0.9"/>` : ""}
       <circle r="${R}" fill="${wc}" stroke="#ffffff"/>
       <text class="nlabel" y="${R + ns * 0.95}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
@@ -1868,7 +1888,8 @@ document.getElementById("import-file").addEventListener("change", e => {
     let incoming;
     try { incoming = migrate(JSON.parse(reader.result)); }
     catch(err){ alert("這個檔案不是有效的織網備份：" + err.message); return; }
-    if (!confirm(`備份內有 ${incoming.customers.length} 位客戶、${incoming.interactions.length} 筆紀錄。\n將整份取代目前資料（目前 ${DB.customers.length} 位客戶）。確定匯入？`)) return;
+    if (!confirm(`備份內有 ${incoming.customers.length} 位客戶、${incoming.interactions.length} 筆紀錄。\n將整份取代目前資料（目前 ${DB.customers.length} 位客戶）。\n目前資料會自動暫存一份以防匯錯。確定匯入？`)) return;
+    try { localStorage.setItem(KEY + "_prebak", JSON.stringify(DB)); } catch(_){}
     DB = incoming;
     save(); gview.inited = false;
     alert("匯入完成。");
