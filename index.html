@@ -257,6 +257,7 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
     <!-- 首頁 -->
     <section class="view active" id="view-home">
       <div id="backup-banner"></div>
+      <div id="home-today"></div>
       <input type="search" id="home-search" placeholder="搜尋姓名、公司、標籤、備註…" autocomplete="off">
       <div id="home-search-results"></div>
       <div class="row" style="margin-top:14px; gap:8px;">
@@ -451,7 +452,7 @@ function esc(s){
 
 /* ---------- 資料層 ---------- */
 function emptyDB(){
-  return {version:1, customers:[], relations:[], interactions:[], purchases:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), settings:{}, lastBackupAt:null};
+  return {version:1, customers:[], relations:[], interactions:[], purchases:[], tasks:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), settings:{}, lastBackupAt:null};
 }
 function migrate(d){
   const base = emptyDB();
@@ -462,6 +463,7 @@ function migrate(d){
   base.relations = d.relations || [];
   base.interactions = d.interactions || [];
   base.purchases = d.purchases || [];
+  base.tasks = (d.tasks || []).filter(t => t && typeof t === "object" && typeof t.id === "string");
   base.settings = (d.settings && typeof d.settings === "object") ? d.settings : {};
   base.lastBackupAt = d.lastBackupAt || null;
   const types = Array.isArray(d.relationTypes) && d.relationTypes.length ? d.relationTypes : DEFAULT_RELTYPES;
@@ -524,6 +526,52 @@ function orgMembers(id){
 function orgSize(id){ return orgMembers(id).length; }
 function orgSpend(id){
   return spentOf(id) + orgMembers(id).reduce((t, x) => t + spentOf(x), 0);
+}
+
+/* ===== 跟進待辦 ===== */
+function tasksOf(id){
+  return DB.tasks.filter(t => t.customerId === id && !t.done)
+    .sort((a, b) => a.due.localeCompare(b.due));
+}
+function openTasks(){
+  return DB.tasks.filter(t => !t.done).sort((a, b) => a.due.localeCompare(b.due));
+}
+function dueTasks(){
+  const today = todayStr();
+  return openTasks().filter(t => t.due <= today);
+}
+function daysUntil(dateStr){
+  const d = new Date(dateStr + "T00:00:00").getTime();
+  const t = new Date(todayStr() + "T00:00:00").getTime();
+  return Math.round((d - t) / 86400000);
+}
+
+/* ===== 生日 ===== */
+function birthdayInDays(c, within){
+  if (!c.birthday) return null;                       // 存 MM-DD 或 YYYY-MM-DD
+  const md = c.birthday.length > 5 ? c.birthday.slice(5) : c.birthday;
+  if (!/^\d{2}-\d{2}$/.test(md)) return null;
+  const today = new Date(todayStr() + "T00:00:00");
+  for (let y = 0; y <= 1; y++){
+    const cand = new Date((today.getFullYear() + y) + "-" + md + "T00:00:00");
+    if (isNaN(cand)) return null;
+    const diff = Math.round((cand - today) / 86400000);
+    if (diff >= 0) return diff <= within ? diff : null;
+  }
+  return null;
+}
+
+/* ===== 回購提醒 ===== */
+function repurchaseDue(id){
+  // 有設回購週期的購買，算出下次該提醒的日子；回傳最急的一筆
+  const list = DB.purchases.filter(x => x.customerId === id && x.cycle > 0);
+  let best = null;
+  list.forEach(x => {
+    const due = new Date(new Date(x.date + "T00:00:00").getTime() + x.cycle * 86400000);
+    const d = Math.round((due - new Date(todayStr() + "T00:00:00")) / 86400000);
+    if (d <= 7 && (!best || d < best.days)) best = {days:d, item:x.item};
+  });
+  return best;
 }
 
 function purchasesOf(id){
@@ -650,9 +698,55 @@ function renderHome(){
         <div class="txt">${esc(i.text)}</div></div>`;
     }).join("") + `</div>`;
   }
+  renderHomeToday();
   renderHomeInsights();
   renderHomeSearch();
 }
+function renderHomeToday(){
+  const box = document.getElementById("home-today");
+  if (!DB.customers.length){ box.innerHTML = ""; return; }
+  const items = [];
+
+  dueTasks().forEach(t => {
+    const c = getCustomer(t.customerId);
+    if (!c) return;
+    const d = daysUntil(t.due);
+    items.push({sort:0, html:
+      `<div class="row" style="margin-bottom:9px; align-items:center;">
+        <button class="btn small" data-donetask="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
+        <span class="grow" data-open="${esc(c.id)}" style="cursor:pointer;"><b>${esc(c.name)}</b>　${esc(t.text)}</span>
+        <span class="muted">${d < 0 ? "逾期 " + (-d) + " 天" : "今天"}</span>
+      </div>`});
+  });
+
+  DB.customers.forEach(c => {
+    const bd = birthdayInDays(c, 7);
+    if (bd !== null) items.push({sort:1, html:
+      `<div class="row" style="margin-bottom:9px;">
+        <span class="grow" data-open="${esc(c.id)}" style="cursor:pointer;"><b>${esc(c.name)}</b>　生日</span>
+        <span class="muted">${bd === 0 ? "就是今天" : bd + " 天後"}</span></div>`});
+    const rp = repurchaseDue(c.id);
+    if (rp) items.push({sort:2, html:
+      `<div class="row" style="margin-bottom:9px;">
+        <span class="grow" data-open="${esc(c.id)}" style="cursor:pointer;"><b>${esc(c.name)}</b>　該回購 ${esc(rp.item)}</span>
+        <span class="muted">${rp.days < 0 ? "已過 " + (-rp.days) + " 天" : rp.days === 0 ? "今天" : rp.days + " 天後"}</span></div>`});
+  });
+
+  items.sort((a, b) => a.sort - b.sort);
+  const upcoming = openTasks().filter(t => daysUntil(t.due) > 0).length;
+  box.innerHTML = items.length
+    ? `<div class="card"><div class="card-title">今天要做的事（${items.length}）</div>${items.map(x => x.html).join("")}
+       ${upcoming ? `<div class="muted" style="margin-top:4px;">另有 ${upcoming} 件待辦排在後面</div>` : ""}</div>`
+    : (upcoming ? `<div class="card"><div class="card-title">今天要做的事</div>
+        <div class="muted">今天沒有待辦，還有 ${upcoming} 件排在後面。</div></div>` : "");
+
+  box.querySelectorAll("[data-donetask]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    const t = DB.tasks.find(x => x.id === b.dataset.donetask);
+    if (t){ t.done = true; t.doneAt = Date.now(); save(); renderHome(); }
+  }));
+}
+
 function renderHomeInsights(){
   const box = document.getElementById("home-insights");
   const dbox = document.getElementById("home-dormant");
@@ -701,8 +795,23 @@ function renderHomeInsights(){
       ` <span class="muted">底下還沒有下線</span>`) : "",
   ].filter(Boolean) : [];
 
-  const rows = [
-    ...orgRows,
+  const ym = todayStr().slice(0, 7);
+  const prevD = new Date(new Date(todayStr() + "T00:00:00").getTime() - 15 * 86400000);
+  const prevYm = new Date(prevD.getFullYear(), prevD.getMonth() - (todayStr().slice(8) >= "16" ? 1 : 0), 1);
+  const lastYm = (() => { const d = new Date(todayStr() + "T00:00:00"); d.setDate(1); d.setMonth(d.getMonth() - 1);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); })();
+  const sumOf = key => DB.purchases.filter(x => x.date.slice(0, 7) === key)
+    .reduce((t, x) => t + (Number(x.amount) || 0), 0);
+  const cntOf = key => DB.purchases.filter(x => x.date.slice(0, 7) === key).length;
+  const thisSum = sumOf(ym), lastSum = sumOf(lastYm);
+  const monthRow = (thisSum || lastSum || cntOf(ym))
+    ? line("本月業績", `<b>${money(thisSum)}</b>　<span class="muted">${cntOf(ym)} 筆</span>` +
+        (lastSum ? `　<span class="muted">上月 ${money(lastSum)}（${thisSum >= lastSum ? "+" : "−"}${money(Math.abs(thisSum - lastSum)).replace("NT$ ", "")}）</span>` : ""))
+    : "";
+
+  // 上半段＝業績與組織，下半段＝客戶洞察，兩組各自組裝（別再用位移量切，會錯位）
+  const topRows = [monthRow, ...orgRows].filter(Boolean);
+  const bottomRows = [
     spender ? line("消費最高", nameLink(spender.c) + ` <span class="muted">累計 ${money(spender.v)}</span>`) : "",
     lastBuy && getCustomer(lastBuy.customerId) ? line("最近成交", nameLink(getCustomer(lastBuy.customerId)) + ` <span class="muted">${esc(lastBuy.item)}・${esc(lastBuy.date)}</span>`) : "",
     noBuy.length ? line("熟但沒成交", noBuy.slice(0, 3).map(nameLink).join("、") + (noBuy.length > 3 ? ` <span class="muted">…共 ${noBuy.length} 位</span>` : "")) : "",
@@ -711,10 +820,9 @@ function renderHomeInsights(){
     islands.length ? line("孤島客戶", islands.slice(0, 3).map(nameLink).join("、") + (islands.length > 3 ? ` <span class="muted">…共 ${islands.length} 位</span>` : "")) : "",
     hotDorm && hotDorm.d.dormant ? line("該回溫的" + esc(warmthLabel("hot")), nameLink(hotDorm.c) + ` <span class="muted">${hotDorm.d.days == null ? "從未互動" : hotDorm.d.days + " 天沒聯絡"}</span>`) : "",
   ].filter(Boolean);
-  const divider = orgRows.length && rows.length > orgRows.length ? '<hr class="card-divider">' : "";
-  const customerRows = rows.slice(orgRows.length).join("");
-  box.innerHTML = rows.length
-    ? `<div class="card"><div class="card-title">網絡洞察</div>${orgRows.join("")}${divider}${customerRows}</div>` : "";
+  const divider = topRows.length && bottomRows.length ? '<hr class="card-divider">' : "";
+  box.innerHTML = (topRows.length || bottomRows.length)
+    ? `<div class="card"><div class="card-title">網絡洞察</div>${topRows.join("")}${divider}${bottomRows.join("")}</div>` : "";
 
   const dorm = DB.customers.map(c => ({c, d: dormantInfo(c.id)})).filter(x => x.d.dormant)
     .sort((x, y) => (y.d.days == null ? 1e9 : y.d.days) - (x.d.days == null ? 1e9 : x.d.days));
@@ -802,6 +910,8 @@ function openDetail(id){
   const spent = spentOf(id);
   const fields = [
     ["電話", c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--brand-red)">${esc(c.phone)}</a>` : ""],
+    ["LINE", c.lineId ? `<a href="https://line.me/ti/p/~${encodeURIComponent(c.lineId)}" target="_blank" rel="noopener" style="color:var(--brand-red)">${esc(c.lineId)}</a>` : ""],
+    ["生日", c.birthday ? esc(c.birthday) + (birthdayInDays(c, 30) !== null ? `　<b>${birthdayInDays(c, 30) === 0 ? "就是今天" : birthdayInDays(c, 30) + " 天後"}</b>` : "") : ""],
     ["公司／職業", esc(c.company)],
     ["怎麼認識的", esc(c.source)],
   ].filter(f => f[1]);
@@ -841,6 +951,17 @@ function openDetail(id){
       <button class="btn grow" id="d-edit">編輯</button>
     </div>
 
+    ${(() => {
+      const ts = tasksOf(id);
+      return ts.length ? `<h2>待辦（${ts.length}）</h2>` + ts.map(t => {
+        const d = daysUntil(t.due);
+        return `<div class="row" style="margin-bottom:8px;">
+          <button class="btn small" data-donetask2="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
+          <span class="grow">${esc(t.text)}</span>
+          <span class="muted">${esc(t.due)}${d < 0 ? "（逾期）" : d === 0 ? "（今天）" : ""}</span></div>`;
+      }).join("") : "";
+    })()}
+
     <h2>購買紀錄（${buys.length}）${spent ? "　累計 " + money(spent) : ""}</h2>
     <div>${buys.length ? buys.map(x =>
       `<div class="ilog"><span class="when">${esc(x.date)}</span>
@@ -872,6 +993,11 @@ function openDetail(id){
   document.getElementById("d-edit").addEventListener("click", () => openEdit(id));
   document.getElementById("d-log").addEventListener("click", () => openQuickLog(id));
   document.getElementById("d-buy").addEventListener("click", () => openPurchase(id));
+  document.querySelectorAll("[data-donetask2]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    const t = DB.tasks.find(x => x.id === b.dataset.donetask2);
+    if (t){ t.done = true; t.doneAt = Date.now(); save(); openDetail(id); }
+  }));
   document.getElementById("d-rel").addEventListener("click", () => openAddRelation(id));
   document.getElementById("d-delete").addEventListener("click", () => {
     if (!confirm(`確定刪除「${c.name}」？相關的關係、互動與購買紀錄會一併刪除，無法復原。`)) return;
@@ -879,6 +1005,7 @@ function openDetail(id){
     DB.relations = DB.relations.filter(r => r.from !== id && r.to !== id);
     DB.interactions = DB.interactions.filter(i => i.customerId !== id);
     DB.purchases = DB.purchases.filter(x => x.customerId !== id);
+    DB.tasks = DB.tasks.filter(x => x.customerId !== id);
     save(); closeSheet(); showView(currentView);
   });
   document.querySelectorAll("[data-delrel]").forEach(b => b.addEventListener("click", e => {
@@ -909,6 +1036,8 @@ function openEdit(id){
     <label>電話</label><input type="tel" id="f-phone" value="${esc(c ? c.phone : "")}">
     <label>公司／職業</label><input type="text" id="f-company" value="${esc(c ? c.company : "")}">
     <label>怎麼認識的</label><input type="text" id="f-source" value="${esc(c ? c.source : "")}" placeholder="例：老王介紹、社團活動…">
+    <label>LINE ID</label><input type="text" id="f-line" value="${esc(c ? (c.lineId || "") : "")}" placeholder="用來一鍵開 LINE 聊天">
+    <label>生日（可只填月日）</label><input type="text" id="f-birthday" value="${esc(c ? (c.birthday || "") : "")}" placeholder="例：03-15 或 1985-03-15" inputmode="numeric">
     <label>標籤（用逗號分隔）</label><input type="text" id="f-tags" value="${esc(c ? (c.tags||[]).join("、") : "")}" placeholder="例：保險、高潛力、台中">
     <label>身份</label>
     <div class="filterbar" id="f-role">
@@ -946,6 +1075,8 @@ function openEdit(id){
       company: document.getElementById("f-company").value.trim(),
       source: document.getElementById("f-source").value.trim(),
       tags, warmth, role,
+      lineId: document.getElementById("f-line").value.trim(),
+      birthday: document.getElementById("f-birthday").value.trim(),
       preference: document.getElementById("f-pref").value.trim(),
       note: document.getElementById("f-note").value.trim(),
       updatedAt: Date.now(),
@@ -984,6 +1115,10 @@ function openQuickLog(customerId){
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("log-pick", null)}
     <label>日期</label><input type="date" id="log-date" value="${todayStr()}">
     <label>聊了什麼</label><textarea id="log-text" rows="4" placeholder="重點記兩句就好…"></textarea>
+    <hr class="card-divider">
+    <label>下次跟進（選填，時間到會出現在首頁「今天要做的事」）</label>
+    <input type="date" id="log-due">
+    <input type="text" id="log-todo" placeholder="要做什麼？例：約見面談續約" style="margin-top:8px;">
     <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="log-save">儲存</button></div>
   `);
   if (!c) wireCustomerPicker("log-pick", null);
@@ -993,6 +1128,9 @@ function openQuickLog(customerId){
     const text = document.getElementById("log-text").value.trim();
     if (!text){ alert("內容不能是空的。"); return; }
     DB.interactions.push({id:uid("i"), customerId:target, date:document.getElementById("log-date").value || todayStr(), text, createdAt:Date.now()});
+    const due = document.getElementById("log-due").value;
+    const todo = document.getElementById("log-todo").value.trim();
+    if (due) DB.tasks.push({id:uid("t"), customerId:target, due, text:todo || "跟進", done:false, createdAt:Date.now()});
     save(); closeSheet();
     if (c) openDetail(c.id); else showView(currentView);
   });
@@ -1007,6 +1145,8 @@ function openPurchase(customerId){
     <label>日期</label><input type="date" id="buy-date" value="${todayStr()}">
     <label>買了什麼（必填）</label><input type="text" id="buy-item" placeholder="例：儲蓄險三年期、保養組合">
     <label>金額（選填）</label><input type="text" id="buy-amount" inputmode="decimal" placeholder="只填數字，例 36000">
+    <label>回購週期（選填，天數；消耗品填了會自動提醒）</label>
+    <input type="text" id="buy-cycle" inputmode="numeric" placeholder="例：30（一個月用完）">
     <label>備註（選填）</label><textarea id="buy-note" rows="2" placeholder="例：分期付款、幫親戚一起買"></textarea>
     <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="buy-save">儲存</button></div>
   `);
@@ -1021,6 +1161,7 @@ function openPurchase(customerId){
     DB.purchases.push({id:uid("p"), customerId:target,
       date:document.getElementById("buy-date").value || todayStr(),
       item, amount: raw ? Number(raw) : null,
+      cycle: (() => { const v = parseInt(document.getElementById("buy-cycle").value, 10); return (v > 0 && v <= 3650) ? v : null; })(),
       note: document.getElementById("buy-note").value.trim(), createdAt:Date.now()});
     save(); closeSheet();
     if (c) openDetail(c.id); else showView(currentView);
