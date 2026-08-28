@@ -232,6 +232,47 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
 }
 .gnode.hit circle{stroke:var(--ink); stroke-width:4;}
 
+/* ===== 首頁：今天 ===== */
+.datehead{padding:2px 2px 12px;}
+.datehead .d{font-size:12.5px; color:var(--ink-soft); letter-spacing:.08em; font-weight:600;}
+.datehead .t{font-size:27px; font-weight:700; letter-spacing:.01em; margin-top:1px; color:var(--ink);}
+.card-lead{display:flex; align-items:center; gap:9px;}
+.card-lead .bar{flex:0 0 auto; width:3px; height:18px; border-radius:2px; background:var(--accent);}
+.card-lead .t{font-size:17px; font-weight:700; letter-spacing:.02em;}
+.todo-sub{font-size:12.5px; color:var(--ink-soft); margin:6px 0 2px 12px;}
+.todo-row{display:flex; gap:11px; align-items:flex-start; padding:11px 0 11px 12px; border-bottom:1px solid var(--line);}
+.todo-row:last-child{border-bottom:0; padding-bottom:2px;}
+.todo-dot{flex:0 0 auto; width:9px; height:9px; border-radius:50%; margin-top:6px;}
+.todo-main{flex:1 1 auto; min-width:0; cursor:pointer;}
+.todo-name{font-weight:600; font-size:15px;}
+.todo-why{font-size:13px; color:var(--ink-soft); margin-top:3px; line-height:1.45;}
+.todo-tag{
+  display:inline-block; font-size:11.5px; font-weight:600; padding:1px 8px;
+  border-radius:999px; margin-left:6px; position:relative; top:-1px;
+}
+.todo-tag.late{background:var(--danger-bg); color:var(--danger);}
+.todo-tag.today{background:var(--accent-soft); color:var(--accent-active);}
+.todo-tag.soon{background:var(--surface-sunken); color:var(--ink-soft);}
+.todo-check{
+  flex:0 0 auto; width:34px; height:34px; border-radius:50%; padding:0;
+  border:1px solid var(--line-strong); background:var(--card);
+  display:flex; align-items:center; justify-content:center; color:var(--ink-soft); cursor:pointer;
+}
+.todo-check:active{background:var(--surface-hover); color:var(--accent);}
+.qa{display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-top:14px;}
+.qa button{
+  display:flex; flex-direction:column; align-items:center; gap:7px; padding:12px 3px 10px;
+  border:1px solid var(--card-line); border-radius:14px; background:var(--card);
+  box-shadow:var(--shadow-sm); font-size:12.5px; font-weight:500; color:var(--ink); cursor:pointer;
+}
+.qa button .ic{
+  width:34px; height:34px; border-radius:11px; background:var(--accent-soft); color:var(--accent);
+  display:flex; align-items:center; justify-content:center;
+}
+.qa button.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+.qa button.on .ic{background:rgba(255,255,255,.2); color:#fff;}
+.qa button:active{transform:translateY(1px);}
+
 /* ===== 業績分頁 ===== */
 .cardtitle{font-weight:700; margin-bottom:8px; display:flex; align-items:baseline; gap:8px;}
 .kpi{display:grid; grid-template-columns:repeat(auto-fit, minmax(82px, 1fr)); gap:9px;}
@@ -276,15 +317,16 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
 
     <!-- 首頁 -->
     <section class="view active" id="view-home">
+      <div id="home-datehead" class="datehead"></div>
       <div id="backup-banner"></div>
       <div id="home-today"></div>
       <input type="search" id="home-search" placeholder="搜尋姓名、公司、標籤、備註…" autocomplete="off">
       <div id="home-search-results"></div>
-      <div class="row" style="margin-top:14px; gap:8px;">
-        <button class="btn primary grow" id="btn-quick-log" style="padding:10px 6px;">記互動</button>
-        <button class="btn grow" id="btn-quick-buy" style="padding:10px 6px;">記購買</button>
-        <button class="btn grow" id="btn-quick-trial" style="padding:10px 6px;">記體驗</button>
-        <button class="btn grow" id="btn-quick-add" style="padding:10px 6px;">新增</button>
+      <div class="qa">
+        <button class="on" id="btn-quick-log"><span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 21l1.9-5.1A8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"/></svg></span>記互動</button>
+        <button id="btn-quick-buy"><span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.4 11.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 7H6"/></svg></span>記購買</button>
+        <button id="btn-quick-trial"><span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6M10 2v7.2L5.4 18A2.4 2.4 0 0 0 7.5 21.6h9A2.4 2.4 0 0 0 18.6 18L14 9.2V2"/><path d="M7 15h10"/></svg></span>記體驗</button>
+        <button id="btn-quick-add"><span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.6"/><path d="M3 20c.7-3.3 3.3-5.2 7-5.2M18 12v6M15 15h6"/></svg></span>新增</button>
       </div>
       <div id="home-insights"></div>
       <div id="home-dormant"></div>
@@ -1351,42 +1393,68 @@ function renderHome(){
   renderHomeInsights();
   renderHomeSearch();
 }
+function todoTag(days){
+  if (days < 0) return `<span class="todo-tag late">逾期 ${-days} 天</span>`;
+  if (days === 0) return `<span class="todo-tag today">今天</span>`;
+  return `<span class="todo-tag soon">${days} 天後</span>`;
+}
+/* 一列＝一個人一件事：熟度色點、姓名、狀態、下面一行為什麼要動他 */
+function todoRow(c, days, why, taskId){
+  return `<div class="todo-row">
+    <span class="todo-dot" style="background:${warmthColor(WARMTH[c.warmth] ? c.warmth : "warm")};"></span>
+    <div class="todo-main" data-open="${esc(c.id)}">
+      <div class="todo-name">${esc(c.name)}${todoTag(days)}</div>
+      <div class="todo-why">${why}</div>
+    </div>
+    ${taskId ? `<button class="todo-check" data-donetask="${esc(taskId)}" aria-label="完成">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5.2L20 7"/></svg></button>` : ""}
+  </div>`;
+}
 function renderHomeToday(){
   const box = document.getElementById("home-today");
+  const dh = document.getElementById("home-datehead");
+  if (dh){
+    const now = new Date(todayStr() + "T00:00:00");
+    const wd = ["日", "一", "二", "三", "四", "五", "六"][now.getDay()];
+    dh.innerHTML = `<div class="d">${now.getMonth() + 1} 月 ${now.getDate()} 日　週${wd}</div>
+      <div class="t">今天</div>`;
+  }
   if (!DB.customers.length){ box.innerHTML = ""; return; }
   const items = [];
+  let late = 0, today = 0;
 
   dueTasks().forEach(t => {
     const c = getCustomer(t.customerId);
     if (!c) return;
     const d = daysUntil(t.due);
-    items.push({sort:0, html:
-      `<div class="row" style="margin-bottom:9px; align-items:center;">
-        <button class="btn small" data-donetask="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
-        <span class="grow" data-open="${esc(c.id)}" style="cursor:pointer;"><b>${esc(c.name)}</b>　${esc(t.text)}</span>
-        <span class="muted">${d < 0 ? "逾期 " + (-d) + " 天" : "今天"}</span>
-      </div>`});
+    if (d < 0) late++; else today++;
+    items.push({sort:d < 0 ? -1 : 0, html: todoRow(c, d, "待辦・" + esc(t.text), t.id)});
   });
 
+  // 「現在要動的」只收逾期與今天；還沒到的併進下面那行預覽，
+  // 否則卡片標題說「現在」卻列著 7 天後的事
+  const soon = [];
   DB.customers.forEach(c => {
     const bd = birthdayInDays(c, 7);
-    if (bd !== null) items.push({sort:1, html:
-      `<div class="row" style="margin-bottom:9px;">
-        <span class="grow" data-open="${esc(c.id)}" style="cursor:pointer;"><b>${esc(c.name)}</b>　生日</span>
-        <span class="muted">${bd === 0 ? "就是今天" : bd + " 天後"}</span></div>`});
+    if (bd !== null){
+      if (bd === 0){ today++; items.push({sort:0, html: todoRow(c, 0, "生日・傳一句祝賀", null)}); }
+      else soon.push(bd);
+    }
     const rp = repurchaseDue(c.id);
-    if (rp) items.push({sort:2, html:
-      `<div class="row" style="margin-bottom:9px;">
-        <span class="grow" data-open="${esc(c.id)}" style="cursor:pointer;"><b>${esc(c.name)}</b>　該回購 ${esc(rp.item)}</span>
-        <span class="muted">${rp.days < 0 ? "已過 " + (-rp.days) + " 天" : rp.days === 0 ? "今天" : rp.days + " 天後"}</span></div>`});
+    if (rp){
+      if (rp.days < 0){ late++; items.push({sort:-1, html: todoRow(c, rp.days, "該回購・" + esc(rp.item), null)}); }
+      else if (rp.days === 0){ today++; items.push({sort:0, html: todoRow(c, 0, "該回購・" + esc(rp.item), null)}); }
+      else soon.push(rp.days);
+    }
   });
 
   items.sort((a, b) => a.sort - b.sort);
   // 未來 7 天預覽：一眼看到接下來幾天的量，不用切視圖
-  const ahead = openTasks().map(t => ({t, d: daysUntil(t.due)})).filter(x => x.d > 0 && x.d <= 7);
+  const ahead = openTasks().map(t => daysUntil(t.due)).concat(soon).filter(d => d > 0 && d <= 7);
   const dayName = d => d === 1 ? "明天" : d === 2 ? "後天" : d + " 天後";
   const grouped = {};
-  ahead.forEach(x => { grouped[x.d] = (grouped[x.d] || 0) + 1; });
+  ahead.forEach(d => { grouped[d] = (grouped[d] || 0) + 1; });
   const laterCount = openTasks().filter(t => daysUntil(t.due) > 7).length;
   const preview = Object.keys(grouped).map(Number).sort((a, b) => a - b)
     .map(d => `${dayName(d)} ${grouped[d]} 件`).join("・");
@@ -1396,13 +1464,16 @@ function renderHomeToday(){
     : "";
 
   const allCount = openTasks().length;
-  const titleRow = n => `<div class="row" style="align-items:baseline;">
-    <span class="card-title grow" style="margin:0 0 10px;">今天要做的事${n ? "（" + n + "）" : ""}</span>
+  const titleRow = `<div class="row" style="align-items:center;">
+    <span class="card-lead grow"><span class="bar"></span><span class="t">現在要動的</span></span>
     ${allCount ? `<button class="btn small" id="open-all-tasks">全部 ${allCount}</button>` : ""}</div>`;
+  const sub = (late || today)
+    ? `<div class="todo-sub">${[late ? "逾期 " + late : "", today ? "今天 " + today : ""].filter(Boolean).join("・")}</div>`
+    : "";
   box.innerHTML = items.length
-    ? `<div class="card">${titleRow(items.length)}${items.map(x => x.html).join("")}${aheadLine}</div>`
-    : ((aheadLine || allCount) ? `<div class="card">${titleRow(0)}
-        <div class="muted">今天沒有待辦。</div>${aheadLine}</div>` : "");
+    ? `<div class="card">${titleRow}${sub}${items.map(x => x.html).join("")}${aheadLine}</div>`
+    : ((aheadLine || allCount) ? `<div class="card">${titleRow}
+        <div class="muted" style="margin-top:8px;">今天沒有要動的事。</div>${aheadLine}</div>` : "");
   const allBtn = document.getElementById("open-all-tasks");
   if (allBtn) allBtn.addEventListener("click", openAllTasks);
 
