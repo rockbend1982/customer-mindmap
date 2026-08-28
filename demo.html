@@ -231,6 +231,30 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
   vector-effect:non-scaling-stroke;
 }
 .gnode.hit circle{stroke:var(--ink); stroke-width:4;}
+
+/* ===== 業績分頁 ===== */
+.cardtitle{font-weight:700; margin-bottom:8px; display:flex; align-items:baseline; gap:8px;}
+.kpi{display:grid; grid-template-columns:repeat(auto-fit, minmax(82px, 1fr)); gap:9px;}
+.kpi > div{background:var(--accent-soft); border-radius:12px; padding:9px 11px;}
+.kpi b{display:block; font-size:17px; font-variant-numeric:tabular-nums; line-height:1.35;}
+.kpi span{font-size:11.5px; color:var(--ink-soft);}
+.bars{display:flex; align-items:stretch; gap:6px; height:136px; margin:4px 0 2px;}
+.bars .bcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px;}
+.bars .bwrap{flex:1 1 auto; width:100%; display:flex; align-items:flex-end;}
+.bars .bfill{width:100%; border-radius:5px 5px 2px 2px; background:var(--btn-primary);}
+.bars .bcol.now .bfill{background:var(--brand-red);}
+.bars .bval, .bars .blab{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
+.rankrow{
+  display:flex; align-items:flex-start; gap:9px;
+  padding:8px 0; border-bottom:1px solid var(--line);
+}
+.rankrow:last-child{border-bottom:0; padding-bottom:0;}
+.rankrow .rno{flex:0 0 1.4em; color:var(--ink-soft); font-size:12px; padding-top:2px; font-variant-numeric:tabular-nums;}
+.rankrow .rname{flex:1 1 auto; min-width:0; font-weight:600;}
+.rankrow .rval{flex:0 0 auto; font-weight:600; font-variant-numeric:tabular-nums; padding-top:1px;}
+.rankrow .rsub{font-size:11.5px; color:var(--ink-soft); margin-top:3px;}
+.rankbar{height:4px; border-radius:99px; background:var(--accent-soft); margin-top:5px;}
+.rankbar > i{display:block; height:100%; border-radius:99px; background:var(--btn-primary);}
 </style>
 
 </head>
@@ -284,6 +308,12 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
       <div class="filterbar" id="graph-filter" style="padding:0 12px 4px;"></div>
       <div id="graph-legend"></div>
       <div id="graph-wrap"><svg id="graph-svg"></svg><div id="focus-bar"></div></div>
+    </section>
+
+    <!-- 業績 -->
+    <section class="view" id="view-sales">
+      <div class="filterbar" id="sales-filter"></div>
+      <div id="sales-body"></div>
     </section>
 
     <!-- 設定 -->
@@ -354,6 +384,9 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
     <button data-view="graph">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.8"/><circle cx="18" cy="8" r="2.8"/><circle cx="12" cy="18" r="2.8"/><path d="M8.5 7l6.7.8M7.2 8.5l3.6 7M16.7 10.5l-3.4 5.2"/></svg>
       關係圖</button>
+    <button data-view="sales">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-6M21.5 20h-19"/></svg>
+      業績</button>
     <button data-view="settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
       設定</button>
@@ -884,8 +917,204 @@ function lastContact(id){
   return list.length ? list[0].date : null;
 }
 
+/* ===== 業績分析 =====
+   體驗品（kind:"trial"）一律不算業績；一張單（orderId）算一筆，客單價才不會被品項數灌水 */
+const SALES_RANGES = [["6m", "近 6 個月"], ["year", "今年"], ["all", "全部"]];
+let gSalesRange = "6m";
+
+function salesFrom(){
+  const t = todayStr();
+  if (gSalesRange === "all") return "0000-01-01";
+  if (gSalesRange === "year") return t.slice(0, 4) + "-01-01";
+  const d = new Date(t + "T00:00:00");
+  d.setDate(1); d.setMonth(d.getMonth() - 5);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+}
+function salesRows(){
+  const from = salesFrom();
+  return DB.purchases.filter(x => !isTrial(x) && x.date >= from);
+}
+function shortMoney(n){
+  n = Math.round(Number(n) || 0);
+  if (n >= 10000) return (n / 10000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "") + " 萬";
+  return n.toLocaleString("en-US");
+}
+function orderCount(rows){
+  const s = new Set();
+  rows.forEach(x => s.add(x.customerId + "|" + (x.orderId || x.id)));
+  return s.size;
+}
+function salesMonths(){
+  const now = new Date(todayStr() + "T00:00:00");
+  let n = 6;
+  if (gSalesRange === "year") n = now.getMonth() + 1;
+  if (gSalesRange === "all"){
+    const first = DB.purchases.filter(x => !isTrial(x)).map(x => x.date).sort()[0];
+    if (first){
+      const f = new Date(first.slice(0, 7) + "-01T00:00:00");
+      n = (now.getFullYear() - f.getFullYear()) * 12 + (now.getMonth() - f.getMonth()) + 1;
+      n = Math.max(1, Math.min(24, n));
+    }
+  }
+  const out = [];
+  for (let i = n - 1; i >= 0; i--){
+    const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(m.getFullYear() + "-" + String(m.getMonth() + 1).padStart(2, "0"));
+  }
+  return out;
+}
+/* 每個「人＋品項」只看最新一筆，否則重買後舊紀錄會因為逾期越久越搶前面 */
+function repurchaseList(){
+  const latest = {};
+  DB.purchases.filter(x => !isTrial(x) && x.cycle > 0).forEach(x => {
+    const k = x.customerId + "|" + String(x.item || "");
+    if (!latest[k] || x.date > latest[k].date) latest[k] = x;
+  });
+  const today = new Date(todayStr() + "T00:00:00");
+  return Object.values(latest).map(x => ({
+    days: Math.round((new Date(new Date(x.date + "T00:00:00").getTime() + x.cycle * 86400000) - today) / 86400000),
+    item: x.item, customerId: x.customerId
+  })).filter(x => x.days <= 30 && getCustomer(x.customerId)).sort((a, b) => a.days - b.days);
+}
+
+function renderSales(){
+  const box = document.getElementById("sales-body");
+  document.getElementById("sales-filter").innerHTML = SALES_RANGES.map(([k, label]) =>
+    `<button class="fbtn ${gSalesRange === k ? "on" : ""}" data-srange="${k}">${label}</button>`).join("");
+
+  const all = DB.purchases.filter(x => !isTrial(x));
+  if (!all.length){
+    box.innerHTML = `<div class="empty">還沒有購買紀錄。<br>在首頁按「記購買」記一筆，這裡就會出現業績分析。</div>`;
+    return;
+  }
+  const rows = salesRows();
+  const sum = rows.reduce((t, x) => t + (Number(x.amount) || 0), 0);
+  const sv = rows.reduce((t, x) => t + (Number(x.sv) || 0), 0);
+  const orders = orderCount(rows);
+  const rangeLabel = (SALES_RANGES.find(r => r[0] === gSalesRange) || ["", ""])[1];
+
+  const kpi = `<div class="card">
+    <div class="cardtitle">${esc(rangeLabel)}業績</div>
+    <div class="kpi">
+      <div><b>${shortMoney(sum)}</b><span>營業額</span></div>
+      <div><b>${orders}</b><span>張單</span></div>
+      <div><b>${shortMoney(orders ? sum / orders : 0)}</b><span>平均客單</span></div>
+      ${sv ? `<div><b>${Math.round(sv).toLocaleString("en-US")}</b><span>SV</span></div>` : ""}
+    </div>
+  </div>`;
+
+  const keys = salesMonths();
+  const mSum = {};
+  keys.forEach(k => mSum[k] = 0);
+  all.forEach(x => { const k = x.date.slice(0, 7); if (k in mSum) mSum[k] += Number(x.amount) || 0; });
+  const peak = Math.max(1, ...keys.map(k => mSum[k]));
+  const thisKey = todayStr().slice(0, 7);
+  const lastKey = keys.length > 1 ? keys[keys.length - 2] : null;
+  const showVal = keys.length <= 8;
+  const diff = lastKey ? mSum[thisKey] - mSum[lastKey] : 0;
+  const trend = `<div class="card">
+    <div class="cardtitle">月營業額</div>
+    <div class="bars">${keys.map(k => `<div class="bcol ${k === thisKey ? "now" : ""}">
+        ${showVal ? `<div class="bval">${mSum[k] ? shortMoney(mSum[k]) : ""}</div>` : ""}
+        <div class="bwrap"><div class="bfill" style="height:${mSum[k] ? Math.max(3, Math.round(mSum[k] / peak * 100)) : 1}%"></div></div>
+        <div class="blab">${Number(k.slice(5))}月</div>
+      </div>`).join("")}</div>
+    ${lastKey ? `<div class="muted" style="margin-top:8px;">本月 <b>${money(mSum[thisKey])}</b>　上月 ${money(mSum[lastKey])}${
+      (mSum[thisKey] || mSum[lastKey]) ? `（${diff >= 0 ? "多" : "少"} ${money(Math.abs(diff)).replace("NT$ ", "")}）` : ""}</div>` : ""}
+  </div>`;
+
+  const byItem = {};
+  rows.forEach(x => {
+    const k = String(x.item || "");
+    const o = byItem[k] || (byItem[k] = {item: k, amount: 0, qty: 0, buyers: new Set()});
+    o.amount += Number(x.amount) || 0;
+    o.qty += Number(x.qty) || 1;
+    o.buyers.add(x.customerId);
+  });
+  const items = Object.values(byItem).sort((a, b) => b.amount - a.amount || b.qty - a.qty);
+  const topAmt = Math.max(1, items.length ? items[0].amount : 1);
+  const prod = items.length ? `<div class="card">
+    <div class="cardtitle">產品排行 <span class="muted">共 ${items.length} 項・點開看誰買的</span></div>
+    ${items.slice(0, 10).map((o, i) => `<div class="rankrow" data-sitem="${esc(o.item)}" style="cursor:pointer;">
+      <div class="rno">${i + 1}</div>
+      <div class="rname">${esc(o.item)}
+        <div class="rankbar"><i style="width:${Math.max(2, Math.round(o.amount / topAmt * 100))}%"></i></div>
+        <div class="rsub">${o.qty} 件・${o.buyers.size} 人買${o.amount ? "" : "・未填金額"}</div>
+      </div>
+      <div class="rval">${shortMoney(o.amount)}</div>
+    </div>`).join("")}
+    ${items.length > 10 ? `<div class="muted" style="margin-top:10px;">只列前 10 項</div>` : ""}
+  </div>` : "";
+
+  const byCust = {};
+  rows.forEach(x => byCust[x.customerId] = (byCust[x.customerId] || 0) + (Number(x.amount) || 0));
+  const custs = Object.entries(byCust).map(([id, v]) => ({c: getCustomer(id), v}))
+    .filter(x => x.c).sort((a, b) => b.v - a.v);
+  const topCust = Math.max(1, custs.length ? custs[0].v : 1);
+  const from = salesFrom();
+  let newSum = 0, newCnt = 0;
+  Object.keys(byCust).forEach(id => {
+    const first = DB.purchases.filter(y => !isTrial(y) && y.customerId === id).map(y => y.date).sort()[0];
+    if (first && first >= from){ newSum += byCust[id]; newCnt++; }
+  });
+  const newLine = (gSalesRange !== "all" && custs.length)
+    ? `<div class="muted" style="margin-top:10px;">這段期間 <b>${custs.length}</b> 位客戶下單，其中 <b>${newCnt}</b> 位是第一次買（貢獻 ${money(newSum)}，佔 ${sum ? Math.round(newSum / sum * 100) : 0}%）</div>`
+    : "";
+  const custCard = custs.length ? `<div class="card">
+    <div class="cardtitle">客戶排行</div>
+    ${custs.slice(0, 5).map((x, i) => `<div class="rankrow" data-open="${esc(x.c.id)}" style="cursor:pointer;">
+      <div class="rno">${i + 1}</div>
+      <div class="rname">${esc(x.c.name)}
+        <div class="rankbar"><i style="width:${Math.max(2, Math.round(x.v / topCust * 100))}%"></i></div>
+      </div>
+      <div class="rval">${shortMoney(x.v)}</div>
+    </div>`).join("")}${newLine}
+  </div>` : "";
+
+  const due = repurchaseList();
+  const dueCard = due.length ? `<div class="card">
+    <div class="cardtitle">回購與補貨 <span class="muted">依每筆設定的回購週期推算</span></div>
+    ${due.slice(0, 8).map(d => {
+      const c = getCustomer(d.customerId), over = d.days < 0;
+      return `<div class="rankrow" data-open="${esc(c.id)}" style="cursor:pointer;">
+        <div class="rname">${esc(c.name)}<div class="rsub">${esc(d.item)}</div></div>
+        <div class="rval"${over ? ' style="color:var(--brand-red);"' : ""}>${
+          over ? "逾期 " + (-d.days) + " 天" : d.days === 0 ? "就是今天" : d.days + " 天後"}</div>
+      </div>`;
+    }).join("")}
+    ${due.length > 8 ? `<div class="muted" style="margin-top:10px;">…共 ${due.length} 筆</div>` : ""}
+  </div>` : "";
+
+  box.innerHTML = kpi + trend + prod + custCard + dueCard;
+}
+
+function openSalesItem(item){
+  const byC = {};
+  salesRows().filter(x => String(x.item || "") === item).forEach(x => {
+    const o = byC[x.customerId] || (byC[x.customerId] = {amount: 0, qty: 0, last: ""});
+    o.amount += Number(x.amount) || 0;
+    o.qty += Number(x.qty) || 1;
+    if (x.date > o.last) o.last = x.date;
+  });
+  const list = Object.entries(byC).map(([id, o]) => ({c: getCustomer(id), o}))
+    .filter(x => x.c).sort((a, b) => b.o.amount - a.o.amount);
+  openSheet(item, list.length
+    ? list.map(x => `<div class="rankrow" data-open="${esc(x.c.id)}" style="cursor:pointer;">
+        <div class="rname">${esc(x.c.name)}<div class="rsub">${x.o.qty} 件・最近 ${esc(x.o.last)}</div></div>
+        <div class="rval">${shortMoney(x.o.amount)}</div>
+      </div>`).join("")
+    : `<div class="muted">這個區間沒有紀錄。</div>`);
+}
+
+document.body.addEventListener("click", e => {
+  const b = e.target.closest("[data-srange]");
+  if (b){ gSalesRange = b.dataset.srange; renderSales(); return; }
+  const it = e.target.closest("[data-sitem]");
+  if (it) openSalesItem(it.dataset.sitem);
+});
+
 /* ---------- 導覽 ---------- */
-const views = ["home","list","graph","settings"];
+const views = ["home","list","graph","sales","settings"];
 let currentView = "home";
 function showView(name){
   currentView = name;
@@ -896,6 +1125,7 @@ function showView(name){
   if (name === "home") renderHome();
   if (name === "list") renderList();
   if (name === "graph") renderGraph();
+  if (name === "sales") renderSales();
   if (name === "settings") renderSettings();
   document.getElementById("main").scrollTop = 0;
 }
@@ -921,6 +1151,7 @@ function refreshView(){
   if (currentView === "home") renderHome();
   else if (currentView === "list") renderList();
   else if (currentView === "graph") renderGraph();
+  else if (currentView === "sales") renderSales();
   else if (currentView === "settings") renderSettings();
 }
 function closeSheet(){
