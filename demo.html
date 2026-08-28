@@ -1026,6 +1026,23 @@ function renderSales(){
     </div>
   </div>`;
 
+  // 業績是結果，行動量才是自己控制得了的部分
+  const fromDate = salesFrom();
+  const fromTs = gSalesRange === "all" ? 0 : new Date(fromDate + "T00:00:00").getTime();
+  const logs = DB.interactions.filter(x => x.date >= fromDate);
+  const trialRows = DB.purchases.filter(x => isTrial(x) && x.date >= fromDate);
+  const newCust = DB.customers.filter(x => (x.createdAt || 0) >= fromTs);
+  const doneTasks = DB.tasks.filter(t => t.done && (t.doneAt || 0) >= fromTs);
+  const act = `<div class="card">
+    <div class="cardtitle">這段期間的行動 <span class="muted">你控制得了的部分</span></div>
+    <div class="kpi">
+      <div><b>${logs.length}</b><span>次聯絡・${new Set(logs.map(x => x.customerId)).size} 人</span></div>
+      <div><b>${orderCount(trialRows)}</b><span>份體驗・${new Set(trialRows.map(x => x.customerId)).size} 人</span></div>
+      <div><b>${newCust.length}</b><span>位新客戶</span></div>
+      <div><b>${doneTasks.length}</b><span>件待辦完成</span></div>
+    </div>
+  </div>`;
+
   const allRetail = all.filter(x => !fromPartner(x.customerId));
   const keys = salesMonths();
   const mSum = {};
@@ -1137,7 +1154,7 @@ function renderSales(){
     ${due.length > 8 ? `<div class="muted" style="margin-top:10px;">…共 ${due.length} 筆</div>` : ""}
   </div>` : "";
 
-  box.innerHTML = kpi + trend + prod + custCard + orgCard + dueCard;
+  box.innerHTML = kpi + act + trend + prod + custCard + orgCard + dueCard;
 }
 
 function openSalesItem(item){
@@ -1677,6 +1694,7 @@ function openDetail(id){
         const multi = o.items.length > 1;
         return `<div class="ilog"><span class="when">${esc(o.date)}</span>
           <button class="btn small ghost" data-delorder="${esc(o.key)}" style="float:right;">刪</button>
+          <button class="btn small ghost" data-editorder="${esc(o.key)}" style="float:right; color:var(--ink-soft);">改</button>
           <div class="txt">${o.items.map(x =>
             `<div><b>${esc(x.item)}</b>${(x.qty && x.qty > 1) ? ` ×${x.qty}` : ""}${Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${Number(x.sv) ? "　SV " + Math.round(x.sv) : ""}</div>`).join("")}
           ${multi ? `<div class="muted" style="margin-top:2px;">合計 ${money(sum)}${sumSv ? "・SV " + Math.round(sumSv) : ""}</div>` : ""}
@@ -1698,6 +1716,7 @@ function openDetail(id){
         <div>${groups.map(o => `<div class="ilog" style="border-left-color:#1f6f8b;">
           <span class="when">${esc(o.date)}</span>
           <button class="btn small ghost" data-delorder="${esc(o.key)}" style="float:right;">刪</button>
+          <button class="btn small ghost" data-editorder="${esc(o.key)}" style="float:right; color:var(--ink-soft);">改</button>
           <div class="txt">${o.items.map(x =>
             `<div><b>${esc(x.item)}</b>${(x.qty && x.qty > 1) ? ` ×${x.qty}` : ""}</div>`).join("")}
           ${o.reaction ? `<div class="muted" style="margin-top:2px;">反應：${esc(o.reaction)}</div>` : ""}
@@ -1717,6 +1736,7 @@ function openDetail(id){
     <div>${logs.length ? logs.map(i =>
       `<div class="ilog"><span class="when">${esc(i.date)}</span>
        <button class="btn small ghost" data-dellog="${esc(i.id)}" style="float:right;">刪</button>
+       <button class="btn small ghost" data-editlog="${esc(i.id)}" style="float:right; color:var(--ink-soft);">改</button>
        <div class="txt">${esc(i.text)}</div></div>`).join("")
       : `<div class="muted">還沒有互動紀錄。</div>`}</div>
 
@@ -1767,6 +1787,15 @@ function openDetail(id){
     if (!confirm("刪除這筆互動紀錄？")) return;
     DB.interactions = DB.interactions.filter(i => i.id !== b.dataset.dellog);
     save(); openDetail(id);
+  }));
+  document.querySelectorAll("[data-editorder]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    const rows = purchaseRowsOf(b.dataset.editorder, id);
+    if (rows.length) openPurchase(id, isTrial(rows[0]) ? "trial" : "buy", b.dataset.editorder);
+  }));
+  document.querySelectorAll("[data-editlog]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    openQuickLog(id, b.dataset.editlog);
   }));
 }
 
@@ -1869,18 +1898,19 @@ function wireCustomerPicker(pickId, excludeId){
   const sel = document.getElementById(pickId);
   q.addEventListener("input", () => { sel.innerHTML = pickerOptionsHTML(excludeId, q.value); });
 }
-function openQuickLog(customerId){
+function openQuickLog(customerId, editId){
   if (!DB.customers.length){ alert("還沒有任何客戶，先新增一位吧。"); return; }
   const c = customerId ? getCustomer(customerId) : null;
-  openSheet("記一筆互動", `
+  const ex = editId ? DB.interactions.find(x => x.id === editId) : null;
+  openSheet(ex ? "修改這筆互動" : "記一筆互動", `
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("log-pick", null)}
-    <label>日期</label><input type="date" id="log-date" value="${todayStr()}">
-    <label>聊了什麼</label><textarea id="log-text" rows="4" placeholder="重點記兩句就好…"></textarea>
-    <hr class="card-divider">
+    <label>日期</label><input type="date" id="log-date" value="${ex ? esc(ex.date) : todayStr()}">
+    <label>聊了什麼</label><textarea id="log-text" rows="4" placeholder="重點記兩句就好…">${ex ? esc(ex.text) : ""}</textarea>
+    ${ex ? "" : `<hr class="card-divider">
     <label>下次跟進（選填，時間到會出現在首頁「今天要做的事」）</label>
     <input type="date" id="log-due">
-    <input type="text" id="log-todo" placeholder="要做什麼？例：約見面談續約" style="margin-top:8px;">
-    <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="log-save">儲存</button></div>
+    <input type="text" id="log-todo" placeholder="要做什麼？例：約見面談續約" style="margin-top:8px;">`}
+    <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="log-save">${ex ? "儲存修改" : "儲存"}</button></div>
   `);
   if (!c) wireCustomerPicker("log-pick", null);
   document.getElementById("log-save").addEventListener("click", () => {
@@ -1888,25 +1918,46 @@ function openQuickLog(customerId){
     if (!target){ alert("請先選一位對象。"); return; }
     const text = document.getElementById("log-text").value.trim();
     if (!text){ alert("內容不能是空的。"); return; }
-    DB.interactions.push({id:uid("i"), customerId:target, date:document.getElementById("log-date").value || todayStr(), text, createdAt:Date.now()});
-    const due = document.getElementById("log-due").value;
-    const todo = document.getElementById("log-todo").value.trim();
-    if (due) DB.tasks.push({id:uid("t"), customerId:target, due, text:todo || "跟進", done:false, createdAt:Date.now()});
+    const date = document.getElementById("log-date").value || todayStr();
+    if (ex){
+      ex.date = date; ex.text = text;
+    } else {
+      DB.interactions.push({id:uid("i"), customerId:target, date, text, createdAt:Date.now()});
+      // 改舊紀錄時不顯示跟進欄位，免得每改一次就多排一筆待辦
+      const due = document.getElementById("log-due").value;
+      const todo = document.getElementById("log-todo").value.trim();
+      if (due) DB.tasks.push({id:uid("t"), customerId:target, due, text:todo || "跟進", done:false, createdAt:Date.now()});
+    }
     save(); closeSheet();
     if (c) openDetail(c.id); else showView(currentView);
   });
 }
 
 /* ---------- 記一筆購買 ---------- */
-function openPurchase(customerId, kind){
+function purchaseRowsOf(key, customerId){
+  if (!key) return [];
+  return key.startsWith("_solo_")
+    ? DB.purchases.filter(x => x.id === key.slice(6))
+    : DB.purchases.filter(x => x.orderId === key && x.customerId === customerId);
+}
+function openPurchase(customerId, kind, editKey){
   if (!DB.customers.length){ alert("還沒有任何客戶，先新增一位吧。"); return; }
   const c = customerId ? getCustomer(customerId) : null;
   const trial = kind === "trial";
-  let lines = [];   // 一張單可以有多個品項，每個品項可以有數量
+  // 改一筆單＝把原本的品項讀回來當草稿，存檔時整單換掉（orderId 與建立時間留著）
+  const editRows = purchaseRowsOf(editKey, customerId);
+  const editing = editRows.length > 0;
+  const first = editing ? editRows[0] : null;
+  // unit 早期沒存，用總額回推；正好讓一直存著沒人讀的 unit/svUnit 派上用場
+  let lines = editRows.map(x => ({
+    item: x.item, qty: x.qty || 1,
+    unit: x.unit != null ? x.unit : (x.amount != null && x.qty ? x.amount / x.qty : null),
+    svUnit: x.svUnit != null ? x.svUnit : (x.sv != null && x.qty ? x.sv / x.qty : null)
+  }));
 
-  openSheet(trial ? "記一筆體驗" : "記一筆購買", `
+  openSheet(editing ? (trial ? "修改這筆體驗" : "修改這筆購買") : (trial ? "記一筆體驗" : "記一筆購買"), `
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("buy-pick", null)}
-    <label>日期</label><input type="date" id="buy-date" value="${todayStr()}">
+    <label>日期</label><input type="date" id="buy-date" value="${editing ? esc(first.date) : todayStr()}">
 
     <label>從商品目錄選（點一下加入這張單）</label>
     <input type="search" id="buy-cat-q" placeholder="輸入關鍵字找商品…" autocomplete="off">
@@ -1921,15 +1972,16 @@ function openPurchase(customerId, kind){
 
     ${trial ? `
       <label>反應／回饋（選填）</label>
-      <textarea id="buy-reaction" rows="2" placeholder="例：膚觸有感，想再試一次；覺得味道太重"></textarea>
-      <label>幾天後回訪（選填，會排進待辦）</label>
-      <input type="text" id="buy-followup" inputmode="numeric" placeholder="例：7（給 7 天份，一週後問感想）">
+      <textarea id="buy-reaction" rows="2" placeholder="例：膚觸有感，想再試一次；覺得味道太重">${editing ? esc(first.reaction || "") : ""}</textarea>
+      ${editing ? "" : `<label>幾天後回訪（選填，會排進待辦）</label>
+      <input type="text" id="buy-followup" inputmode="numeric" placeholder="例：7（給 7 天份，一週後問感想）">`}
     ` : `
       <label>回購週期（選填，天數；消耗品填了會自動提醒）</label>
-      <input type="text" id="buy-cycle" inputmode="numeric" placeholder="例：30（一個月用完）">
+      <input type="text" id="buy-cycle" inputmode="numeric" placeholder="例：30（一個月用完）"
+        value="${editing && first.cycle ? first.cycle : ""}">
     `}
-    <label>備註（選填）</label><textarea id="buy-note" rows="2" placeholder="${trial ? "例：在她家客廳體驗、朋友一起試" : "例：分期付款、幫親戚一起買"}"></textarea>
-    <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="buy-save">儲存</button></div>
+    <label>備註（選填）</label><textarea id="buy-note" rows="2" placeholder="${trial ? "例：在她家客廳體驗、朋友一起試" : "例：分期付款、幫親戚一起買"}">${editing ? esc(first.note || "") : ""}</textarea>
+    <div class="row" style="margin-top:18px;"><button class="btn primary grow" id="buy-save">${editing ? "儲存修改" : "儲存"}</button></div>
   `);
   if (!c) wireCustomerPicker("buy-pick", null);
 
@@ -2051,7 +2103,12 @@ function openPurchase(customerId, kind){
     const note = document.getElementById("buy-note").value.trim();
     const reactEl = document.getElementById("buy-reaction");
     const reaction = reactEl ? reactEl.value.trim() : "";
-    const orderId = uid("o");
+    const orderId = editing ? (first.orderId || uid("o")) : uid("o");
+    const createdAt = editing ? (first.createdAt || Date.now()) : Date.now();
+    if (editing){
+      const drop = new Set(editRows.map(x => x.id));
+      DB.purchases = DB.purchases.filter(x => !drop.has(x.id));
+    }
     lines.forEach(l => {
       DB.purchases.push({id:uid("p"), customerId:target, date, orderId,
         kind: trial ? "trial" : "buy", reaction,
@@ -2060,7 +2117,7 @@ function openPurchase(customerId, kind){
         amount: l.unit == null ? null : l.unit * l.qty,
         svUnit: l.svUnit == null ? null : l.svUnit,
         sv: l.svUnit == null ? null : l.svUnit * l.qty,
-        cycle, note, createdAt:Date.now()});
+        cycle, note, createdAt});
     });
     // 體驗排回訪待辦：體驗完不追等於白做
     const fuEl = document.getElementById("buy-followup");
