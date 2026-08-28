@@ -190,7 +190,7 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
   font-size:12px; color:var(--ink-soft); -webkit-overflow-scrolling:touch;
 }
 #graph-legend .lg{flex:0 0 auto; display:flex; align-items:center; gap:5px; white-space:nowrap;}
-#graph-legend .sw{width:16px; height:3px; border-radius:2px;}
+#graph-legend .sw{width:26px; height:6px; flex:0 0 auto;}
 #graph-legend .swdot{width:11px; height:11px; border-radius:50%;}
 #graph-wrap{flex:1 1 auto; position:relative; overflow:hidden; touch-action:none; background:
   radial-gradient(var(--dot) 1px, transparent 1px); background-size:26px 26px;}
@@ -569,15 +569,21 @@ function inlineRename(el, current, onDone){
   inp.addEventListener("blur", commit);
   inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
 }
+/* 關係線：色相刻意拉開，再各配不同虛線樣式，讓線在小螢幕上不只能靠顏色分辨 */
 const DEFAULT_RELTYPES = [
-  {key:"upline",    label:"上線",   directed:true,  color:"#1f6f8b", builtin:true, tree:true},
-  {key:"intro",     label:"介紹人", directed:true,  color:"#c81d1d", builtin:true},
-  {key:"family",    label:"家人",   directed:false, color:"#7a6172", builtin:true},
-  {key:"friend",    label:"朋友",   directed:false, color:"#5c7a68", builtin:true},
-  {key:"colleague", label:"同事",   directed:false, color:"#48606e", builtin:true},
-  {key:"club",      label:"其他",   directed:false, color:"#8c7a52", builtin:true},
+  {key:"upline",    label:"上線",   directed:true,  color:"#0f766e", dash:"",      builtin:true, tree:true},
+  {key:"intro",     label:"介紹人", directed:true,  color:"#c81d1d", dash:"",      builtin:true},
+  {key:"family",    label:"家人",   directed:false, color:"#7c3aed", dash:"9 5",   builtin:true},
+  {key:"friend",    label:"朋友",   directed:false, color:"#15803d", dash:"",      builtin:true},
+  {key:"colleague", label:"同事",   directed:false, color:"#b45309", dash:"2 5",   builtin:true},
+  {key:"club",      label:"其他",   directed:false, color:"#64748b", dash:"12 4 3 4", builtin:true},
 ];
-const CUSTOM_COLORS = ["#7a2e4e","#4f4a68","#6e5a3f","#3f5a5e","#5b4632","#70473e"];
+/* 舊版低飽和配色：使用者沒自訂過的話，載入時自動升級成上面的新色 */
+const LEGACY_RELTYPE_COLORS = {
+  upline:"#1f6f8b", family:"#7a6172", friend:"#5c7a68", colleague:"#48606e", club:"#8c7a52",
+};
+const CUSTOM_COLORS = ["#be185d","#4338ca","#a16207","#0e7490","#7c2d12","#4d7c0f"];
+const CUSTOM_DASHES = ["5 4", "", "10 4", "2 4", "8 3 2 3", "6 6"];
 
 let DB = null;
 
@@ -688,8 +694,17 @@ function migrate(d){
 
   const types = Array.isArray(d.relationTypes) && d.relationTypes.length
     ? d.relationTypes.filter(t => t && typeof t === "object" && isStr(t.key) && t.key && isStr(t.label) && t.label)
-        .map(t => ({key:t.key, label:t.label.slice(0, 20), directed: !!t.directed,
-          color: isColor(t.color) ? t.color : "#888888", builtin: !!t.builtin, tree: !!t.tree}))
+        .map(t => {
+          const def = DEFAULT_RELTYPES.find(x => x.key === t.key);
+          // 還停在舊版低飽和色（沒自訂過）就升級成新配色，並補上虛線樣式
+          const legacy = LEGACY_RELTYPE_COLORS[t.key];
+          const color = isColor(t.color)
+            ? ((legacy && t.color.toLowerCase() === legacy.toLowerCase() && def) ? def.color : t.color)
+            : (def ? def.color : "#888888");
+          return {key:t.key, label:t.label.slice(0, 20), directed: !!t.directed, color,
+            dash: isStr(t.dash) ? t.dash : (def ? (def.dash || "") : ""),
+            builtin: !!t.builtin, tree: !!t.tree};
+        })
     : JSON.parse(JSON.stringify(DEFAULT_RELTYPES));   // 深拷貝：直接引用會讓改名/改色污染全域預設
   const have = new Set(types.map(t => t.key));
   DEFAULT_RELTYPES.forEach(t => { if (!have.has(t.key)) types.push(JSON.parse(JSON.stringify(t))); });
@@ -1812,7 +1827,9 @@ function renderGraphLegend(){
     Object.keys(WARMTH).map(k =>
       `<span class="lg"><span class="swdot" style="background:${warmthColor(k)}"></span>${esc(warmthLabel(k))}</span>`).join("") +
     DB.relationTypes.filter(t => usedTypes.has(t.key) && (gMode === "net" || t.key === TREE_REL[gMode])).map(t =>
-      `<span class="lg"><span class="sw" style="background:${t.color}"></span>${esc(t.label)}</span>`).join("");
+      `<span class="lg"><svg class="sw" viewBox="0 0 26 6" aria-hidden="true"><line x1="1" y1="3" x2="25" y2="3"
+        stroke="${t.color}" stroke-width="3" stroke-linecap="round"
+        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}/></svg>${esc(t.label)}</span>`).join("");
 }
 
 function updateFocusBar(id){
@@ -1999,8 +2016,10 @@ function renderGraph(){
     const room = (d - R * 2) * gview.s > 46 || !!off;
     return `<g class="gedge ${dim ? "dim" : ""}">
       <path d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
-        stroke="${t.color}" stroke-width="2.2" ${t.directed ? `marker-end="url(#arrow-${esc(t.key)})"` : ""}
-        stroke-linecap="round" opacity="0.85"/>
+        stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
+        ${t.directed ? `marker-end="url(#arrow-${esc(t.key)})"` : ""}
+        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
+        stroke-linecap="round" opacity="0.9"/>
       ${room ? `<text class="elabel" x="${lx}" y="${ly - (off ? 0 : 5)}" font-size="${ls.toFixed(1)}" fill="${t.color}">${esc(t.label)}</text>` : ""}
     </g>`;
   }).join("");
@@ -2272,8 +2291,10 @@ document.getElementById("btn-add-reltype").addEventListener("click", () => {
   if (!label){ alert("請輸入種類名稱。"); return; }
   if (DB.relationTypes.some(t => t.label === label)){ alert("已經有同名的種類了。"); return; }
   const directed = document.getElementById("new-reltype-directed").checked;
-  const color = CUSTOM_COLORS[DB.relationTypes.length % CUSTOM_COLORS.length];
-  DB.relationTypes.push({key:uid("t"), label, directed, color, builtin:false});
+  const n = DB.relationTypes.length;
+  const color = CUSTOM_COLORS[n % CUSTOM_COLORS.length];
+  const dash = CUSTOM_DASHES[n % CUSTOM_DASHES.length];
+  DB.relationTypes.push({key:uid("t"), label, directed, color, dash, builtin:false});
   document.getElementById("new-reltype").value = "";
   document.getElementById("new-reltype-directed").checked = false;
   save(); renderSettings();
