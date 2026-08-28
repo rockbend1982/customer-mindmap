@@ -2289,14 +2289,32 @@ function renderGraph(){
       <path d="M0 0 L10 5 L0 10 z" fill="${t.color}"/></marker>`).join("")}
   </defs>`;
 
+  // 佔位方框：姓名（畫在圓下方，位置可預先算）＋已放好的關係標籤。
+  // 關係標籤放置時要同時閃開這兩種，否則短邊上的說明會互相壓成一團
+  const ns0 = Math.min(72, 12 / Math.max(gview.s, 0.12));
+  const taken = drawList.map(c => {
+    const p = nodePos(c);
+    const half = String(c.name || "").length * ns0 * 0.55 + ns0 * 0.25;
+    return {x1: p.x - half, x2: p.x + half,
+            y1: p.y - R, y2: p.y + R + ns0 * (gMode === "org" ? 2.75 : 1.25)};
+  });
+  // 群名標題貼在群框上緣，也是關係標籤不能壓的字
+  groupBlocks(vis).forEach(b => {
+    const hs = Math.min(80, 13 / Math.max(gview.s, 0.12));
+    taken.push({x1: b.x1 + 8, x2: b.x1 + 12 + String(b.label || "").length * hs * 0.62,
+                y1: b.y1 - hs * 1.25, y2: b.y1});
+  });
+  const hitsTaken = (x, y, hw, hh) => taken.some(b =>
+    x + hw > b.x1 && x - hw < b.x2 && y + hh > b.y1 && y - hh < b.y2);
+
   const pkey = r => r.from < r.to ? r.from + "|" + r.to : r.to + "|" + r.from;
   const pairGroups = {};
   rels.forEach(r => { (pairGroups[pkey(r)] = pairGroups[pkey(r)] || []).push(r); });
   Object.values(pairGroups).forEach(g => g.sort((a, b) => a.id.localeCompare(b.id)));
 
-  const edges = rels.map(r => {
+  const edgeParts = rels.map(r => {
     const a = byId[r.from], b = byId[r.to];
-    if (!a || !b) return "";
+    if (!a || !b) return null;
     const pa = nodePos(a), pb = nodePos(b);
     const t = relType(r.type);
     const dx = pb.x - pa.x, dy = pb.y - pa.y;
@@ -2318,23 +2336,41 @@ function renderGraph(){
     const cx = (x1 + x2) / 2 + nx * off, cy = (y1 + y2) / 2 + ny * off;
     const dim = fset && !(fset.has(r.from) && fset.has(r.to));
     const ls = Math.min(60, 10.5 / Math.max(gview.s, 0.12));
-
-    // 同一對人有多條關係時，標籤沿線錯開，不要全部疊在中點
     const nInPair = grp.length;
-    const tPos = nInPair > 1
-      ? 0.5 + (grp.indexOf(r) - (nInPair - 1) / 2) * 0.26
-      : 0.5;
+
+    // 標籤一律放在自己那條弧的正上方（姓名固定畫在圓下方，往上必然避開）。
+    // 舊版沿線前後錯開，短邊上標籤仍落在節點旁被姓名壓住；改成沿法線依序
+    // 往上疊，每條各自貼著自己的弧，彼此距離固定不重疊
     const bez = t2 => {
       const u = 1 - t2;
       return {x: u*u*x1 + 2*u*t2*cx + t2*t2*x2, y: u*u*y1 + 2*u*t2*cy + t2*t2*y2};
     };
-    const lp = bez(Math.min(0.82, Math.max(0.18, tPos)));
-    // 標籤側移避開姓名：量用螢幕像素（否則縮放後幾乎沒挪到），方向一律往上
-    // ——姓名固定畫在圓的下方，往上就必然是遠離姓名的那一側
-    let sx = nx, sy = ny;
-    if (sy > 0){ sx = -sx; sy = -sy; }
-    const sidePx = off ? 0 : 15 / Math.max(gview.s, 0.12);
-    const lx = lp.x + sx * sidePx, ly = lp.y + sy * sidePx;
+    const lp = bez(0.5);
+    const upSign = ny < 0 ? 1 : -1;                        // 法線恆指向螢幕上方
+    // 純法線在「近乎垂直的線」上等於往側邊挪，剛好挪進節點姓名那一帶；
+    // 混入固定的向上分量，讓這種線的標籤改成斜上方離開姓名
+    let ox = nx * upSign * 0.55, oy = ny * upSign * 0.55 - 0.45;
+    const on = Math.hypot(ox, oy) || 1;
+    ox /= on; oy /= on;
+    const px = 1 / Math.max(gview.s, 0.12);                // 1 螢幕像素 = 幾個 SVG 單位
+    const maxOff = (nInPair - 1) / 2 * 30 * px;            // 最外側那條弧的鼓起量
+    // 預設位置：抬到全部弧之上再留 16px。撞到姓名或別條線的說明就換位置——
+    // 同一段距離先試線的上側、再試下側，一格一格往外，但最多只挪 35px：
+    // 再遠標籤就飄到別群的地盤、看起來像在標別條線，那寧可不標
+    const bs = 16 * px + maxOff / 2;
+    const lhw = t.label.length * ls * 0.55 + ls * 0.2, lhh = ls * 0.62;
+    let lx = lp.x + ox * bs, ly = lp.y + oy * bs, fit = false;
+    for (const tp of [0.5, 0.62, 0.38]){          // 中點放不下就沿著自己的線前後挪
+      const q = bez(tp);
+      for (let k = 0; k <= 5 && !fit; k++){
+        for (const dir of [1, -1]){
+          const c = dir * (bs + k * 7 * px);
+          const tx = q.x + ox * c, ty = q.y + oy * c;
+          if (!hitsTaken(tx, ty, lhw, lhh)){ lx = tx; ly = ty; fit = true; break; }
+        }
+      }
+      if (fit) break;
+    }
 
     // 空間夠不夠要用「標籤實際寬度」判斷，不能只看線長門檻：
     // 舊版對多重關係開例外強制顯示，短邊上兩個標籤會互相壓、還蓋住姓名
@@ -2343,16 +2379,23 @@ function renderGraph(){
     // 箭頭大小依「佔線長比例」決定：大箭頭約 10px、小箭頭約 6px。
     // 用絕對像素一刀切會把單一關係的短邊也連坐，方向資訊整片消失
     const arrowMark = !t.directed ? null : (edgePx > 34 ? "arrow-" : edgePx > 16 ? "arrows-" : null);
-    const room = edgePx > Math.max(40, labelPx * (nInPair > 1 ? 1.9 : 1.25));
-    return `<g class="gedge ${dim ? "dim" : ""}">
-      <path d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
+    // 標籤改走獨立圖層、又統一挪到線的上方後，短邊也不再互相壓或蓋姓名，門檻放寬
+    const room = fit && edgePx > Math.max(24, labelPx * 0.75);
+    if (room) taken.push({x1: lx - lhw, x2: lx + lhw, y1: ly - lhh, y2: ly + lhh});
+    return {
+      path: `<path class="gedge" d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
         stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
         ${arrowMark ? `marker-end="url(#${arrowMark}${esc(t.key)})"` : ""}
         ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
-        stroke-linecap="round" opacity="0.9"/>
-      ${room ? `<text class="elabel" x="${lx}" y="${ly - (off ? 0 : 5)}" font-size="${ls.toFixed(1)}" fill="${t.color}">${esc(t.label)}</text>` : ""}
-    </g>`;
-  }).join("");
+        stroke-linecap="round" opacity="${dim ? 0.11 : 0.9}"/>`,
+      label: room
+        ? `<text class="elabel" x="${lx}" y="${ly + ls * 0.35}" font-size="${ls.toFixed(1)}" fill="${t.color}" opacity="${dim ? 0.12 : 1}">${esc(t.label)}</text>`
+        : ""
+    };
+  }).filter(Boolean);
+  // 線與標籤分兩層：同一組多重關係裡，後畫的線原本會蓋掉先畫那條的說明字
+  const edges = edgeParts.map(e => e.path).join("");
+  const edgeLabels = edgeParts.map(e => e.label).join("");
 
   const nodes = drawList.map(c => {
     const isMe = c.id === "__me__";
@@ -2376,7 +2419,7 @@ function renderGraph(){
     </g>`;
   }).join("");
 
-  svg.innerHTML = defs + `<g id="gworld" transform="translate(${gview.tx},${gview.ty}) scale(${gview.s})">${groupHullsSVG(vis)}${edges}${nodes}</g>`;
+  svg.innerHTML = defs + `<g id="gworld" transform="translate(${gview.tx},${gview.ty}) scale(${gview.s})">${groupHullsSVG(vis)}${edges}${nodes}${edgeLabels}</g>`;
   wrap.style.backgroundPosition = gview.tx + "px " + gview.ty + "px";
   const bs = 26 * gview.s;
   wrap.style.backgroundSize = bs + "px " + bs + "px";
