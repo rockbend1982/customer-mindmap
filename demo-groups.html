@@ -301,6 +301,27 @@ details.fold > summary::after{content:"▾"; margin-left:auto; color:var(--ink-s
 details.fold[open] > summary::after{content:"▴";}
 details.fold > summary .muted{font-weight:400;}
 details.fold > div{padding-bottom:12px;}
+.catgrid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;}
+.catcard{
+  display:flex; align-items:flex-start; gap:8px; padding:9px 10px; min-width:0;
+  border:1px solid var(--card-line); border-radius:12px; background:var(--card);
+  text-align:left; cursor:pointer;
+}
+.catcard .ci{
+  flex:0 0 auto; width:30px; height:30px; border-radius:9px;
+  background:var(--surface-sunken); color:var(--ink-soft);
+  font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center;
+}
+.catcard .cm{flex:1 1 auto; min-width:0;}
+.catcard .cn{
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  font-size:12.5px; font-weight:600; line-height:1.32; word-break:break-word;
+}
+.catcard .cp{display:block; font-size:11.5px; color:var(--ink-soft); margin-top:1px;}
+.catcard .cplus{flex:0 0 auto; width:20px; height:20px; border-radius:50%;
+  border:1px solid var(--line-strong); color:var(--ink-soft); font-size:14px; line-height:18px; text-align:center;}
+.catcard:active{border-color:var(--accent); background:var(--accent-wash);}
+.catmore{grid-column:1 / -1; text-align:center; font-size:12.5px; color:var(--ink-soft); padding:4px 0 0;}
 
 /* ===== 業績分頁 ===== */
 .cardtitle{font-weight:700; margin-bottom:8px; display:flex; align-items:baseline; gap:8px;}
@@ -2127,11 +2148,11 @@ function openPurchase(customerId, kind, editKey){
     ${c ? `<div style="font-weight:600;">${esc(c.name)}</div>` : `<label>對象</label>` + customerPickerHTML("buy-pick", null)}
     <label>日期</label>${dateSegHTML("buy-date", editing ? first.date : todayStr())}
 
-    <label>從商品目錄選（點一下加入這張單）</label>
+    <label>加品項 <span class="muted" style="font-weight:400;">點一下加入・常買的排前面</span></label>
     <input type="search" id="buy-cat-q" placeholder="輸入關鍵字找商品…" autocomplete="off">
-    <select id="buy-cat-pick" size="5" style="height:auto; margin-top:6px;"></select>
+    <div class="catgrid" id="buy-cat-pick"></div>
     <div class="row" style="margin-top:8px;">
-      <input type="text" id="buy-manual" class="grow" placeholder="或自己打品項名稱">
+      <input type="text" id="buy-manual" class="grow" placeholder="不在目錄裡？自己打品項名稱">
       <button class="btn small" id="buy-add-manual" style="flex:0 0 auto;">加入</button>
     </div>
 
@@ -2244,19 +2265,34 @@ function openPurchase(customerId, kind, editKey){
 
   const cq = document.getElementById("buy-cat-q");
   const cpick = document.getElementById("buy-cat-pick");
+  // 賣得最多的就那幾樣，沒關鍵字時把買過的次數當排序依據推到最前面
+  const boughtCount = {};
+  DB.purchases.forEach(x => { boughtCount[x.item] = (boughtCount[x.item] || 0) + 1; });
+  const LIMIT = 16;
   const fillCatalog = () => {
     const kw = cq.value.trim().toLowerCase();
-    const hits = (kw ? CATALOG.filter(x => (x[0] + " " + x[3]).toLowerCase().includes(kw)) : CATALOG).slice(0, 40);
-    // 搜尋同時比對分類，所以選項也要標出分類，否則使用者看不出這筆為何入選
-    cpick.innerHTML = hits.map(x =>
-      `<option value="${esc(x[0])}">${esc(x[0])}${x[1] ? "　" + money(x[1]).replace("NT$ ", "$") : ""}${x[2] ? "・SV " + x[2] : ""}${x[3] ? "・" + esc(x[3]) : ""}</option>`).join("");
+    // 搜尋同時比對分類，所以卡片上也標分類，否則使用者看不出這筆為何入選
+    let hits = kw ? CATALOG.filter(x => (x[0] + " " + x[3]).toLowerCase().includes(kw)) : CATALOG.slice();
+    if (!kw) hits.sort((a, b) => (boughtCount[b[0]] || 0) - (boughtCount[a[0]] || 0));
+    const shown = hits.slice(0, LIMIT);
+    cpick.innerHTML = shown.map(x => `<button type="button" class="catcard" data-cat="${esc(x[0])}">
+        <span class="ci">${esc(String(x[0]).replace(/^[\[(（【][^\])）】]*[\])）】]\s*/, "").slice(0, 1))}</span>
+        <span class="cm">
+          <span class="cn">${esc(x[0])}</span>
+          <span class="cp">${x[1] ? money(x[1]).replace("NT$ ", "$") : "未標價"}${x[2] ? "・SV " + x[2] : ""}${kw && x[3] ? "・" + esc(x[3]) : ""}</span>
+        </span>
+        <span class="cplus">＋</span>
+      </button>`).join("")
+      + (hits.length > shown.length
+        ? `<div class="catmore">還有 ${hits.length - shown.length} 項——打關鍵字找</div>` : "")
+      || `<div class="catmore">目錄裡找不到「${esc(cq.value.trim())}」，可以用下面的欄位自己打。</div>`;
+    cpick.querySelectorAll("[data-cat]").forEach(btn => btn.addEventListener("click", () => {
+      const hit = CATALOG.find(x => x[0] === btn.dataset.cat);
+      if (hit) addLine(hit[0], hit[1] || null, hit[2] || null);
+    }));
   };
   fillCatalog();
   cq.addEventListener("input", fillCatalog);
-  cpick.addEventListener("change", () => {
-    const hit = CATALOG.find(x => x[0] === cpick.value);
-    if (hit) addLine(hit[0], hit[1] || null, hit[2] || null);
-  });
   const addManual = () => {
     const el = document.getElementById("buy-manual");
     const v = el.value.trim();
