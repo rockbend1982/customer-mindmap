@@ -369,9 +369,10 @@ details.detfold > div{padding:0 0 14px;}
 .bars .bcol.now .blab{color:var(--accent); font-weight:600;}
 /* 平均線：看得出哪幾個月在水準之上 */
 .bars .avgline{position:absolute; left:0; right:0; border-top:1px dashed var(--line-strong); pointer-events:none;}
+/* 標籤靠右會蓋在最新月份的柱子上（本月通常最高），改靠左並用半透明底 */
 .bars .avgline span{
-  position:absolute; right:0; top:-15px; font-size:10px; color:var(--ink-soft);
-  background:var(--card); padding:0 4px; letter-spacing:.03em;
+  position:absolute; left:0; top:-14px; font-size:10px; color:var(--ink-soft);
+  background:rgba(255,255,255,.86); padding:0 4px; border-radius:3px; letter-spacing:.03em;
 }
 .rankrow{
   display:flex; align-items:flex-start; gap:9px;
