@@ -20,7 +20,7 @@
   --paper:#ffffff; --card:#ffffff; --ink:#252525; --ink-soft:#6c757d;
   --line:#e9e9e9; --line-strong:#d9d9d9; --card-line:#ececec;
   --accent:#252525; --brand-red:#c81d1d; --accent-soft:#ededed;
-  --btn-line:#252525; --btn-primary:#212121;
+  --btn-line:#252525; --btn-primary:#212121; --partner:#1f6f8b;
   --hot:#c81d1d; --warm:#252525; --cold:#c3c9cf; --cold-fg:#252525;
   --hot-bg:#f9e4e4; --warm-bg:#ededed; --cold-bg:#f2f4f5;
   --danger:#a80b0b; --danger-bg:#faeaea;
@@ -32,7 +32,7 @@ body.skin-paper{
   --paper:#faf6f0; --card:#ffffff; --ink:#3a3128; --ink-soft:#6f6457;
   --line:#e7ddd0; --line-strong:#e7ddd0; --card-line:#e7ddd0;
   --accent:#c2571a; --brand-red:#c2571a; --accent-soft:#f4e3d5;
-  --btn-line:#e7ddd0; --btn-primary:#c2571a;
+  --btn-line:#e7ddd0; --btn-primary:#c2571a; --partner:#1f6f8b;
   --hot:#c2571a; --warm:#d99a2b; --cold:#7d8b99; --cold-fg:#ffffff;
   --hot-bg:#f7e2d3; --warm-bg:#f8ecd2; --cold-bg:#e5eaef;
   --danger:#b3372f; --danger-bg:#f6e0de;
@@ -144,7 +144,7 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 .person .info{flex:1; min-width:0;}
 .person .name-row{display:flex; align-items:center; flex-wrap:wrap; gap:5px 6px;}
 .person .name{font-weight:600;}
-.person .chip.partner{background:#1f6f8b; color:#fff;}
+.person .chip.partner{background:var(--partner); color:#fff;}
 .person .meta{font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px;}
 .person .amount{flex:0 0 auto; font-size:12.5px; font-weight:600; color:var(--ink); align-self:center; white-space:nowrap;}
 
@@ -309,6 +309,12 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
         </select>
         <label>熟度顏色（點色塊修改）</label>
         <div class="row" id="warmth-row"></div>
+        <label>夥伴外框顏色（關係圖節點外環、名單與詳情的夥伴徽章）</label>
+        <div class="row">
+          <input type="color" class="colorpick" id="pc-color">
+          <span class="grow"></span>
+          <button class="btn small" id="pc-reset">恢復預設</button>
+        </div>
         <div class="muted" style="margin-top:8px;">點虛線底線的名稱可以改名。</div>
         <label>沉睡門檻（幾天沒聯絡算沉睡）</label>
         <input type="number" id="dormant-days" min="1" max="365" inputmode="numeric">
@@ -389,6 +395,9 @@ function warmthColor(k){
   const c = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
   return c || SKIN_WARMTH[currentSkin()][k];
 }
+function partnerColor(){
+  return (DB && DB.settings && DB.settings.partnerColor) || "#1f6f8b";
+}
 function fgFor(hex){
   const n = parseInt(String(hex).slice(1), 16);
   const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
@@ -401,6 +410,9 @@ function applySkin(){
     if (custom) document.body.style.setProperty("--" + k, custom);
     else document.body.style.removeProperty("--" + k);
   });
+  const pc = DB && DB.settings && DB.settings.partnerColor;
+  if (pc) document.body.style.setProperty("--partner", pc);
+  else document.body.style.removeProperty("--partner");
 }
 function warmthLabel(k){
   const custom = DB && DB.settings && DB.settings.warmthLabels && DB.settings.warmthLabels[k];
@@ -795,7 +807,7 @@ function openDetail(id){
   openSheet(c.name, `
     <div>
       <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span>
-      ${isPartner(c) ? `<span class="chip" style="background:#1f6f8b;color:#fff;">${esc(ROLES[roleOf(c)].label)}</span>` : ""}
+      ${isPartner(c) ? `<span class="chip" style="background:${partnerColor()};color:#fff;">${esc(ROLES[roleOf(c)].label)}</span>` : ""}
       ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
     </div>
     ${(() => {
@@ -1583,7 +1595,7 @@ function renderGraph(){
       ? `<text class="slabel" y="${R + ns * 2.35}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" data-nid="${c.id}" transform="translate(${pt.x},${pt.y})">
-      ${partner ? `<circle r="${R + 5}" fill="none" stroke="#1f6f8b" stroke-width="2.5" opacity="0.9"/>` : ""}
+      ${partner ? `<circle r="${R + 5}" fill="none" stroke="${partnerColor()}" stroke-width="2.5" opacity="0.9"/>` : ""}
       <circle r="${R}" fill="${wc}" stroke="#ffffff"/>
       <text class="nlabel" y="${R + ns * 0.95}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
       ${sub}
@@ -1776,6 +1788,16 @@ function renderSettings(){
   document.getElementById("wc-reset").onclick = () => {
     delete DB.settings.warmthColors;
     delete DB.settings.warmthLabels;
+    save(); applySkin(); renderSettings();
+  };
+  const pcInp = document.getElementById("pc-color");
+  pcInp.value = partnerColor();
+  pcInp.onchange = () => {
+    DB.settings.partnerColor = pcInp.value;
+    save(); applySkin();
+  };
+  document.getElementById("pc-reset").onclick = () => {
+    delete DB.settings.partnerColor;
     save(); applySkin(); renderSettings();
   };
   document.querySelectorAll("[data-wname]").forEach(sp => {
