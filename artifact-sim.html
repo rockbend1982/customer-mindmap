@@ -319,6 +319,15 @@ details.fold > div{padding-bottom:12px;}
   border:1px solid var(--line-strong); color:var(--ink-soft); font-size:14px; line-height:18px; text-align:center;}
 .catcard:active{border-color:var(--accent); background:var(--accent-wash);}
 .catmore{grid-column:1 / -1; text-align:center; font-size:12.5px; color:var(--ink-soft); padding:4px 0 0;}
+details.gfold{border:0; border-top:1px solid var(--line); border-radius:0; padding:0 12px; margin:0;}
+details.gfold > summary{padding:8px 0; font-size:13px; font-weight:600; color:var(--ink-soft);}
+details.gfold > div{padding-bottom:4px;}
+#graph-mode{padding:8px 12px 4px; margin:0;}
+.hero{padding:2px 0 12px; border-bottom:1px solid var(--line); margin-bottom:12px;}
+.hero .lab{font-size:12.5px; color:var(--ink-soft); letter-spacing:.06em; font-weight:600;}
+.hero .val{font-size:28px; font-weight:700; letter-spacing:-.01em; margin-top:2px; font-variant-numeric:tabular-nums;}
+.hero .sub{font-size:12.5px; color:var(--ink-soft); margin-top:3px;}
+.grouplab{font-size:12px; font-weight:700; letter-spacing:.1em; color:var(--ink-soft); margin:2px 0 8px;}
 
 /* ===== 業績分頁 ===== */
 .cardtitle{font-weight:700; margin-bottom:8px; display:flex; align-items:baseline; gap:8px;}
@@ -392,8 +401,14 @@ details.fold > div{padding-bottom:12px;}
         <input type="search" id="graph-search" placeholder="找人並定位…" autocomplete="off">
         <button class="btn small" id="btn-relayout">整理版面</button>
       </div>
-      <div class="filterbar" id="graph-filter" style="padding:0 12px 4px;"></div>
-      <div id="graph-legend"></div>
+      <div class="filterbar" id="graph-mode"></div>
+      <details class="fold gfold" id="graph-fold">
+        <summary>篩選與圖例</summary>
+        <div>
+          <div class="filterbar" id="graph-filter" style="padding:0 0 4px;"></div>
+          <div id="graph-legend"></div>
+        </div>
+      </details>
       <div id="graph-wrap"><svg id="graph-svg"></svg><div id="focus-bar"></div></div>
     </section>
 
@@ -1634,9 +1649,14 @@ function renderHomeInsights(){
   const svOf = key => DB.purchases.filter(x => !isTrial(x) && x.date.slice(0, 7) === key)
     .reduce((t, x) => t + (Number(x.sv) || 0), 0);
   const thisSv = svOf(ym);
+  // 本月業績是這張卡最該一眼看到的數字，抽出來當大字，不跟其他十幾行擠在一起
   const monthRow = (thisSum || lastSum || cntOf(ym))
-    ? line("本月業績", `<b>${money(thisSum)}</b>　<span class="muted">${cntOf(ym)} 筆${thisSv ? "・SV " + Math.round(thisSv) : ""}</span>` +
-        (lastSum ? `　<span class="muted">上月 ${money(lastSum)}（${thisSum >= lastSum ? "+" : "−"}${money(Math.abs(thisSum - lastSum)).replace("NT$ ", "")}）</span>` : ""))
+    ? `<div class="hero">
+        <div class="lab">本月業績</div>
+        <div class="val">${money(thisSum)}</div>
+        <div class="sub">${cntOf(ym)} 筆${thisSv ? "・SV " + Math.round(thisSv) : ""}${
+          lastSum ? `　上月 ${money(lastSum)}（${thisSum >= lastSum ? "多" : "少"} ${money(Math.abs(thisSum - lastSum)).replace("NT$ ", "")}）` : ""}</div>
+      </div>`
     : "";
 
   // 上半段＝業績與組織，下半段＝客戶洞察，兩組各自組裝（別再用位移量切，會錯位）
@@ -1661,9 +1681,17 @@ function renderHomeInsights(){
     islands.length ? line("孤島客戶", islands.slice(0, 3).map(nameLink).join("、") + (islands.length > 3 ? ` <span class="muted">…共 ${islands.length} 位</span>` : "")) : "",
     hotDorm && hotDorm.d.dormant ? line("該回溫的" + esc(warmthLabel("hot")), nameLink(hotDorm.c) + ` <span class="muted">${hotDorm.d.days == null ? "從未往來" : hotDorm.d.days + " 天沒聯絡"}</span>`) : "",
   ].filter(Boolean);
-  const divider = topRows.length && bottomRows.length ? '<hr class="card-divider">' : "";
+  // monthRow 是整塊 hero，orgRows 才是條列，兩者分開放才不會混在同一組小標下
+  const orgOnly = topRows.filter(x => x !== monthRow);
+  const divider = orgOnly.length && bottomRows.length ? '<hr class="card-divider">' : "";
   box.innerHTML = (topRows.length || bottomRows.length)
-    ? `<div class="card"><div class="card-title">網絡洞察</div>${topRows.join("")}${divider}${bottomRows.join("")}</div>` : "";
+    ? `<div class="card">
+        <div class="card-lead" style="margin-bottom:12px;"><span class="bar"></span><span class="t">網絡洞察</span></div>
+        ${monthRow}
+        ${orgOnly.length ? `<div class="grouplab">組織</div>${orgOnly.join("")}` : ""}
+        ${divider}
+        ${bottomRows.length ? `<div class="grouplab">客戶</div>${bottomRows.join("")}` : ""}
+      </div>` : "";
 
   const dorm = DB.customers.map(c => ({c, d: dormantInfo(c.id)})).filter(x => x.d.dormant)
     .sort((x, y) => (y.d.days == null ? 1e9 : y.d.days) - (x.d.days == null ? 1e9 : x.d.days));
@@ -2691,17 +2719,28 @@ function centerOn(c){
 }
 
 function renderGraphChips(){
+  // 模式留在外面（常換），篩選與圖例收進摺疊——四層工具原本吃掉半個螢幕
+  const mode = document.getElementById("graph-mode");
   const el = document.getElementById("graph-filter");
   const tags = [...new Set(DB.customers.flatMap(c => c.tags || []))].sort().slice(0, 8);
-  el.innerHTML =
+  mode.innerHTML =
     `<button class="fbtn ${gMode === "net" ? "on" : ""}" data-gmode="net">網絡</button>` +
     `<button class="fbtn ${gMode === "org" ? "on" : ""}" data-gmode="org">組織圖</button>` +
-    `<button class="fbtn ${gMode === "intro" ? "on" : ""}" data-gmode="intro">轉介鏈</button>` +
-    `<span style="flex:0 0 1px; background:var(--line); align-self:stretch;"></span>` +
+    `<button class="fbtn ${gMode === "intro" ? "on" : ""}" data-gmode="intro">轉介鏈</button>`;
+  el.innerHTML =
     ["hot", "warm", "cold"].map(k =>
       `<button class="fbtn ${gFilterWarmth === k ? "on" : ""}" data-gwarm="${k}">${esc(warmthLabel(k))}</button>`).join("") +
     tags.map(t => `<button class="fbtn ${gFilterTag === t ? "on" : ""}" data-gtag="${esc(t)}">#${esc(t)}</button>`).join("");
-  el.querySelectorAll("[data-gmode]").forEach(b => b.addEventListener("click", () => {
+  // 摺疊起來時也要看得出有沒有在篩，否則會忘記自己開著篩選
+  const fold = document.getElementById("graph-fold");
+  if (fold){
+    const on = [gFilterWarmth ? warmthLabel(gFilterWarmth) : "", gFilterTag ? "#" + gFilterTag : ""].filter(Boolean);
+    fold.querySelector("summary").innerHTML = on.length
+      ? `篩選中：<span style="color:var(--accent);">${esc(on.join("・"))}</span>`
+      : "篩選與圖例";
+    if (on.length) fold.open = true;
+  }
+  mode.querySelectorAll("[data-gmode]").forEach(b => b.addEventListener("click", () => {
     gMode = b.dataset.gmode; gFocus = null; gFocusDepth = 1; gview.inited = false; renderGraph();
   }));
   el.querySelectorAll("[data-gwarm]").forEach(b => b.addEventListener("click", () => {
