@@ -582,6 +582,10 @@ const DEFAULT_RELTYPES = [
 const LEGACY_RELTYPE_COLORS = {
   upline:"#1f6f8b", family:"#7a6172", friend:"#5c7a68", colleague:"#48606e", club:"#8c7a52",
 };
+/* 曾用過的預設名稱：使用者沒自己改過的話，載入時跟著改版更新成現行預設名 */
+const LEGACY_RELTYPE_LABELS = {
+  club: ["同社團", "同公司"],
+};
 const CUSTOM_COLORS = ["#be185d","#4338ca","#a16207","#0e7490","#7c2d12","#4d7c0f"];
 const CUSTOM_DASHES = ["5 4", "", "10 4", "2 4", "8 3 2 3", "6 6"];
 
@@ -701,7 +705,10 @@ function migrate(d){
           const color = isColor(t.color)
             ? ((legacy && t.color.toLowerCase() === legacy.toLowerCase() && def) ? def.color : t.color)
             : (def ? def.color : "#888888");
-          return {key:t.key, label:t.label.slice(0, 20), directed: !!t.directed, color,
+          // 名稱同理：還停在舊版預設名（沒自訂過）就更新成現行預設名
+          const oldLabels = LEGACY_RELTYPE_LABELS[t.key] || [];
+          const label = (def && oldLabels.includes(t.label)) ? def.label : t.label.slice(0, 20);
+          return {key:t.key, label, directed: !!t.directed, color,
             dash: isStr(t.dash) ? t.dash : (def ? (def.dash || "") : ""),
             builtin: !!t.builtin, tree: !!t.tree};
         })
