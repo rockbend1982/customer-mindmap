@@ -576,11 +576,6 @@ function warmthColor(k){
 function partnerColor(){
   return (DB && DB.settings && DB.settings.partnerColor) || "#1f6f8b";
 }
-function fgFor(hex){
-  const n = parseInt(String(hex).slice(1), 16);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#252525" : "#ffffff";
-}
 function applySkin(){
   document.body.classList.toggle("skin-paper", currentSkin() === "paper");
   ["hot", "warm", "cold"].forEach(k => {
@@ -644,12 +639,21 @@ function esc(s){
 }
 
 /* ---------- 資料層 ---------- */
+/* 資料結構版本。改欄位（改名、換算單位、拆表）時把 DB_VERSION 加一，
+   並在 upgradeFrom 補上那一版的搬移邏輯——migrate 的逐欄驗證只能丟掉壞資料，
+   救不了「格式沒錯但意思變了」的舊資料 */
+const DB_VERSION = 2;
+function upgradeFrom(d, from){
+  // v1 → v2：欄位相容，只是把版本號真的用起來（v1 時代寫死 1 但從沒人讀）
+  return d;
+}
 function emptyDB(){
-  return {version:1, customers:[], relations:[], interactions:[], purchases:[], tasks:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), settings:{}, lastBackupAt:null};
+  return {version:DB_VERSION, customers:[], relations:[], interactions:[], purchases:[], tasks:[], relationTypes:JSON.parse(JSON.stringify(DEFAULT_RELTYPES)), settings:{}, lastBackupAt:null};
 }
 function migrate(d){
   const base = emptyDB();
   if (!d || typeof d !== "object" || !Array.isArray(d.customers)) throw new Error("格式不正確");
+  d = upgradeFrom(d, Number(d.version) || 1);
 
   // 匯入的 JSON 可能是手改過的：逐欄驗證，不合格的丟掉而不是讓它進資料層後炸畫面
   const isStr = v => typeof v === "string";
@@ -678,7 +682,7 @@ function migrate(d){
     preference: str(c.preference), note: str(c.note),
     pos: (c.pos && Number.isFinite(Number(c.pos.x)) && Number.isFinite(Number(c.pos.y)))
       ? {x:Number(c.pos.x), y:Number(c.pos.y)} : null,
-    createdAt: num(c.createdAt) || Date.now(), updatedAt: num(c.updatedAt) || Date.now(),
+    createdAt: num(c.createdAt) || Date.now(),
   }));
 
   const has = id => seenC.has(id);          // 外鍵檢查：指向不存在客戶的資料一律丟棄
@@ -780,7 +784,8 @@ function loadDB(){
 function save(){
   // 回傳是否真的寫入；失敗時明講「這次修改沒有存進去」，不要讓畫面看起來成功
   let ok = false;
-  try { localStorage.setItem(KEY, JSON.stringify(DB)); ok = true; }
+  // _dropped 只是匯入當下要回報「丟掉幾筆」，不是資料本身，別讓它長住在 localStorage
+  try { localStorage.setItem(KEY, JSON.stringify(DB, (k, v) => k === "_dropped" ? undefined : v)); ok = true; }
   catch(e){
     alert("儲存失敗，這次的修改沒有存進裝置：" + e.message +
       "\n\n可能是儲存空間已滿或瀏覽器隱私模式。請先用「備份」把資料匯出，避免遺失。");
@@ -1209,6 +1214,13 @@ function closeSheet(){
 }
 document.getElementById("sheet-close").addEventListener("click", closeSheet);
 maskEl.addEventListener("click", closeSheet);
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape" || !sheetEl.classList.contains("show")) return;
+  // 游標在輸入框裡時不關，避免表單填到一半按 Esc 全部消失
+  const tag = (document.activeElement || {}).tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  closeSheet();
+});
 
 /* ---------- 共用：客戶搜尋 ---------- */
 function searchCustomers(q){
@@ -1335,10 +1347,26 @@ function renderHomeToday(){
   const allBtn = document.getElementById("open-all-tasks");
   if (allBtn) allBtn.addEventListener("click", openAllTasks);
 
-  box.querySelectorAll("[data-donetask]").forEach(b => b.addEventListener("click", e => {
+  bindTaskButtons(box, renderHome);
+}
+
+/* 待辦的完成與還原原本在首頁、全部待辦、客戶詳情各寫一份，改一處會漏兩處 */
+function setTaskDone(id, done, after){
+  const t = DB.tasks.find(x => x.id === id);
+  if (!t) return;
+  t.done = !!done;
+  if (done) t.doneAt = Date.now(); else delete t.doneAt;
+  save();
+  if (after) after();
+}
+function bindTaskButtons(root, after){
+  root.querySelectorAll("[data-donetask]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
-    const t = DB.tasks.find(x => x.id === b.dataset.donetask);
-    if (t){ t.done = true; t.doneAt = Date.now(); save(); renderHome(); }
+    setTaskDone(b.dataset.donetask, true, after);
+  }));
+  root.querySelectorAll("[data-undotask]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    setTaskDone(b.dataset.undotask, false, after);
   }));
 }
 
@@ -1351,7 +1379,7 @@ function openAllTasks(){
     const d = daysUntil(t.due);
     const when = d < 0 ? `逾期 ${-d} 天` : d === 0 ? "今天" : d === 1 ? "明天" : `${d} 天後`;
     return `<div class="row" style="margin-bottom:10px; align-items:center;">
-      <button class="btn small" data-donetask3="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
+      <button class="btn small" data-donetask="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
       <span class="grow" data-open="${esc(t.customerId)}" style="cursor:pointer;">
         <b>${esc(c ? c.name : "（已刪除）")}</b>　${esc(t.text)}
         <div class="muted" style="font-size:12px;">${esc(t.due)}</div></span>
@@ -1368,16 +1396,7 @@ function openAllTasks(){
         <button class="btn small" data-undotask="${esc(t.id)}" style="flex:0 0 auto;">還原</button></div>`;
     }).join("") : ""}
   `);
-  document.querySelectorAll("[data-donetask3]").forEach(b => b.addEventListener("click", e => {
-    e.stopPropagation();
-    const t = DB.tasks.find(x => x.id === b.dataset.donetask3);
-    if (t){ t.done = true; t.doneAt = Date.now(); save(); openAllTasks(); }
-  }));
-  document.querySelectorAll("[data-undotask]").forEach(b => b.addEventListener("click", e => {
-    e.stopPropagation();
-    const t = DB.tasks.find(x => x.id === b.dataset.undotask);
-    if (t){ t.done = false; delete t.doneAt; save(); openAllTasks(); }
-  }));
+  bindTaskButtons(sheetEl, openAllTasks);
 }
 
 function renderHomeInsights(){
@@ -1606,7 +1625,7 @@ function openDetail(id){
       return ts.length ? `<h2>待辦（${ts.length}）</h2>` + ts.map(t => {
         const d = daysUntil(t.due);
         return `<div class="row" style="margin-bottom:8px;">
-          <button class="btn small" data-donetask2="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
+          <button class="btn small" data-donetask="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
           <span class="grow">${esc(t.text)}</span>
           <span class="muted">${esc(t.due)}${d < 0 ? "（逾期）" : d === 0 ? "（今天）" : ""}</span></div>`;
       }).join("") : "";
@@ -1679,11 +1698,7 @@ function openDetail(id){
   document.getElementById("d-log").addEventListener("click", () => openQuickLog(id));
   document.getElementById("d-buy").addEventListener("click", () => openPurchase(id, "buy"));
   document.getElementById("d-trial").addEventListener("click", () => openPurchase(id, "trial"));
-  document.querySelectorAll("[data-donetask2]").forEach(b => b.addEventListener("click", e => {
-    e.stopPropagation();
-    const t = DB.tasks.find(x => x.id === b.dataset.donetask2);
-    if (t){ t.done = true; t.doneAt = Date.now(); save(); openDetail(id); }
-  }));
+  bindTaskButtons(sheetEl, () => openDetail(id));
   document.getElementById("d-rel").addEventListener("click", () => openAddRelation(id));
   document.getElementById("d-delete").addEventListener("click", () => {
     if (!confirm(`確定刪除「${c.name}」？相關的關係、互動與購買紀錄會一併刪除，無法復原。`)) return;
@@ -1775,7 +1790,6 @@ function openEdit(id){
       birthday: document.getElementById("f-birthday").value.trim(),
       preference: document.getElementById("f-pref").value.trim(),
       note: document.getElementById("f-note").value.trim(),
-      updatedAt: Date.now(),
     };
     if (c) Object.assign(c, data);
     else DB.customers.push(Object.assign({id:uid("c"), pos:null, createdAt:Date.now()}, data));
@@ -2391,12 +2405,18 @@ function renderGraphLegend(){
   const usedTypes = new Set(DB.relations.map(r => r.type));
   const lg = document.getElementById("graph-legend");
   lg.innerHTML =
+    (gMode === "net" && !DB.settings.dragHinted
+      ? `<span class="lg" style="color:var(--accent); font-weight:600;">按住人可以拖</span>` : "") +
     Object.keys(WARMTH).map(k =>
       `<span class="lg"><span class="swdot" style="background:${warmthColor(k)}"></span>${esc(warmthLabel(k))}</span>`).join("") +
     DB.relationTypes.filter(t => usedTypes.has(t.key) && (gMode === "net" || t.key === TREE_REL[gMode])).map(t =>
       `<span class="lg"><svg class="sw" viewBox="0 0 26 6" aria-hidden="true"><line x1="1" y1="3" x2="25" y2="3"
         stroke="${t.color}" stroke-width="3" stroke-linecap="round"
-        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}/></svg>${esc(t.label)}</span>`).join("");
+        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}/></svg>${esc(t.label)}</span>`).join("") +
+    (DB.customers.some(c => dormantInfo(c.id).dormant)
+      ? `<span class="lg"><span class="swdot" style="width:13px; height:13px; background:transparent;
+          border:2px dashed #9aa2a9; box-sizing:border-box;"></span>沉睡</span>` : "") +
+    "";
 }
 
 function updateFocusBar(id){
@@ -2789,6 +2809,7 @@ function applyGraphTransformOnly(){
       if (gFocus === downNode.id) openDetail(downNode.id);
       else { gFocus = downNode.id; gFocusDepth = 1; centerOn(downNode); renderGraph(); }
     } else if (mode === "node" && dragNode && moved){
+      if (!DB.settings.dragHinted){ DB.settings.dragHinted = true; renderGraphLegend(); }
       save();
     }
     mode = null; dragNode = null; downNode = null; startPt = null;
