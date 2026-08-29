@@ -30,7 +30,8 @@
   --danger:#a32b28; --danger-bg:#f9e6e4;
   --logo:#c81d1d;                       /* 沿用原本的識別色，不隨主題走 */
   --surface-sunken:#faf4f2; --surface-hover:#f5ebe8;
-  --shadow-rgb:60 42 40;
+  --accent-lite:#c58890; --chart-lo:#d9b4b4; --chart-lo2:#eddad7;
+  --shadow-rgb:60 42 40; --shadow-flood:rgb(60,42,40);
   --shadow-sm:0 1px 2px rgb(var(--shadow-rgb)/.05), 0 2px 6px rgb(var(--shadow-rgb)/.05);
   --shadow-md:0 2px 4px rgb(var(--shadow-rgb)/.06), 0 8px 20px rgb(var(--shadow-rgb)/.07);
   --r-btn:999px; --r-card:12px; --r-input:8px; --r-person:12px;
@@ -341,6 +342,14 @@ details.fold > div{padding-bottom:12px;}
   background:var(--card); font-size:12px; color:var(--ink-soft); cursor:pointer;
 }
 .minitabs button.on{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-active); font-weight:600;}
+.themes{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+.thm{
+  display:flex; align-items:center; gap:7px; padding:6px 13px 6px 7px;
+  border:1px solid var(--card-line); border-radius:999px; background:var(--card);
+  font-size:13.5px; color:var(--ink); cursor:pointer;
+}
+.thm .sw{width:18px; height:18px; border-radius:50%; flex:0 0 auto;}
+.thm.on{border-color:var(--accent); background:var(--accent-soft); font-weight:600;}
 .kpi > div.tap{cursor:pointer;}
 .kpi > div.tap:active{background:var(--surface-hover);}
 .bars .bcol.tap{cursor:pointer;}
@@ -382,8 +391,8 @@ details.detfold > div{padding:0 0 14px;}
 .bars .bcol{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px;}
 .bars .bwrap{flex:1 1 auto; width:100%; display:flex; align-items:flex-end;}
 /* 過去的月份用淡青，本月用主色實心——一眼看得出哪根是這個月 */
-.bars .bfill{width:100%; border-radius:6px 6px 2px 2px; background:linear-gradient(180deg,#d9b4b4,#eddad7);}
-.bars .bcol.now .bfill{background:linear-gradient(180deg,var(--accent),#c58890);}
+.bars .bfill{width:100%; border-radius:6px 6px 2px 2px; background:linear-gradient(180deg,var(--chart-lo),var(--chart-lo2));}
+.bars .bcol.now .bfill{background:linear-gradient(180deg,var(--accent),var(--accent-lite));}
 .bars .bval, .bars .blab{font-size:11px; color:var(--ink-soft); white-space:nowrap;}
 .bars .bcol.now .blab{color:var(--accent); font-weight:600;}
 /* 平均線：看得出哪幾個月在水準之上 */
@@ -403,8 +412,8 @@ details.detfold > div{padding:0 0 14px;}
 .rankrow .rval{flex:0 0 auto; font-weight:600; font-variant-numeric:tabular-nums; padding-top:1px;}
 .rankrow .rsub{font-size:11.5px; color:var(--ink-soft); margin-top:3px;}
 .rankbar{height:6px; border-radius:99px; background:var(--surface-sunken); margin-top:6px; overflow:hidden;}
-.rankbar > i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),#c58890);}
-.rankrow:nth-child(n+5) .rankbar > i{background:linear-gradient(90deg,#d9b4b4,#eddad7);}
+.rankbar > i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),var(--accent-lite));}
+.rankrow:nth-child(n+5) .rankbar > i{background:linear-gradient(90deg,var(--chart-lo),var(--chart-lo2));}
 </style>
 </head>
 <body>
@@ -487,6 +496,8 @@ details.detfold > div{padding:0 0 14px;}
       </div>
       <div class="card">
         <div class="card-lead" style="margin-bottom:10px;"><span class="bar"></span><span class="t">外觀</span></div>
+        <label>配色主題</label>
+        <div class="themes" id="theme-row"></div>
         <label>熟度顏色（點色塊修改）</label>
         <div class="row" id="warmth-row"></div>
         <label>夥伴外框顏色（關係圖節點外環、名單與詳情的夥伴徽章）</label>
@@ -715,8 +726,80 @@ const ROLES = {
 function roleOf(c){ return ROLES[c && c.role] ? c.role : "customer"; }
 function isPartner(c){ return roleOf(c) !== "customer"; }
 
-const DEFAULT_WARMTH = {hot:"#b8503f", warm:"#6b5f60", cold:"#c9c2c3"};
-const DEFAULT_PARTNER = "#6d7c8a";
+/* 每套主題是一組完整的 CSS 變數。熟度色與夥伴色也屬於主題，
+   但使用者若自己調過，那個自訂值永遠優先（設定頁按「恢復預設」才會回到主題色） */
+const THEMES = {
+  rose: {label:"玫瑰褐", vars:{
+    paper:"#fffaf8", card:"#ffffff", ink:"#3d3436", "ink-soft":"#7a6d6f",
+    line:"#f2e9e6", "line-strong":"#e0d2ce", "card-line":"#ece0dc",
+    accent:"#a86a72", "accent-soft":"#f7ece9", "accent-wash":"#fdf8f7",
+    "accent-hover":"#8f545c", "accent-active":"#7a464e", "accent-lite":"#c58890",
+    "btn-line":"#e0d2ce", "btn-primary":"#a86a72", partner:"#6d7c8a",
+    hot:"#b8503f", warm:"#6b5f60", cold:"#c9c2c3",
+    "hot-bg":"#f9e9e5", "warm-bg":"#f0ecec", "cold-bg":"#f5f2f2",
+    danger:"#a32b28", "danger-bg":"#f9e6e4",
+    "surface-sunken":"#faf4f2", "surface-hover":"#f5ebe8",
+    "chart-lo":"#d9b4b4", "chart-lo2":"#eddad7",
+    "shadow-rgb":"60 42 40", "shadow-flood":"rgb(60,42,40)", dot:"#f0e6e3",
+  }},
+  sage: {label:"鼠尾草綠", vars:{
+    paper:"#fbfaf7", card:"#ffffff", ink:"#333730", "ink-soft":"#6d726a",
+    line:"#eceee8", "line-strong":"#d8ddd3", "card-line":"#e5e8e0",
+    accent:"#5f8264", "accent-soft":"#e9f0ea", "accent-wash":"#f7faf7",
+    "accent-hover":"#4a6b50", "accent-active":"#3d5a43", "accent-lite":"#8aab8e",
+    "btn-line":"#d8ddd3", "btn-primary":"#5f8264", partner:"#7a6d8f",
+    hot:"#c2703a", warm:"#5c625b", cold:"#c4c9c3",
+    "hot-bg":"#f7ebe1", "warm-bg":"#eceeea", "cold-bg":"#f2f4f1",
+    danger:"#a8402f", "danger-bg":"#f8e8e4",
+    "surface-sunken":"#f6f8f4", "surface-hover":"#edf1ea",
+    "chart-lo":"#a9c5ac", "chart-lo2":"#d5e3d6",
+    "shadow-rgb":"40 50 38", "shadow-flood":"rgb(40,50,38)", dot:"#e8ece4",
+  }},
+  lilac: {label:"薰衣草紫", vars:{
+    paper:"#fcfbfd", card:"#ffffff", ink:"#35303c", "ink-soft":"#6f6878",
+    line:"#efedf3", "line-strong":"#ddd8e4", "card-line":"#e8e4ee",
+    accent:"#7d6b96", "accent-soft":"#efecf5", "accent-wash":"#faf9fc",
+    "accent-hover":"#63527b", "accent-active":"#524267", "accent-lite":"#a597ba",
+    "btn-line":"#ddd8e4", "btn-primary":"#7d6b96", partner:"#6d8a8f",
+    hot:"#b5566a", warm:"#5f5a66", cold:"#c6c3cc",
+    "hot-bg":"#f7e8ec", "warm-bg":"#eeecf0", "cold-bg":"#f3f2f5",
+    danger:"#9e3348", "danger-bg":"#f8e5e9",
+    "surface-sunken":"#f7f5fa", "surface-hover":"#f0edf5",
+    "chart-lo":"#b9adcb", "chart-lo2":"#ded8e8",
+    "shadow-rgb":"45 38 55", "shadow-flood":"rgb(45,38,55)", dot:"#eae6f0",
+  }},
+  champagne: {label:"香檳金", vars:{
+    paper:"#ffffff", card:"#ffffff", ink:"#2b2724", "ink-soft":"#6d675f",
+    line:"#f2eee7", "line-strong":"#e0d8ca", "card-line":"#ebe4d9",
+    accent:"#a8834c", "accent-soft":"#f5eee2", "accent-wash":"#fdfbf7",
+    "accent-hover":"#866538", "accent-active":"#6e532d", "accent-lite":"#c9ab77",
+    "btn-line":"#e0d8ca", "btn-primary":"#a8834c", partner:"#5f6f7a",
+    hot:"#b0603a", warm:"#57514a", cold:"#c7c2ba",
+    "hot-bg":"#f8ece4", "warm-bg":"#efedea", "cold-bg":"#f4f2ee",
+    danger:"#9e3b2a", "danger-bg":"#f8e8e3",
+    "surface-sunken":"#faf7f1", "surface-hover":"#f4eee3",
+    "chart-lo":"#d5bd93", "chart-lo2":"#ece0c9",
+    "shadow-rgb":"55 45 30", "shadow-flood":"rgb(55,45,30)", dot:"#efe8db",
+  }},
+  nuskin: {label:"品牌青", vars:{
+    paper:"#ffffff", card:"#ffffff", ink:"#272525", "ink-soft":"#63666a",
+    line:"#eef1f3", "line-strong":"#d8d8d8", "card-line":"#e5e5e5",
+    accent:"#008ab0", "accent-soft":"#e6f4f8", "accent-wash":"#f4fafc",
+    "accent-hover":"#00738f", "accent-active":"#005f77", "accent-lite":"#4fb3cd",
+    "btn-line":"#d8d8d8", "btn-primary":"#008ab0", partner:"#6b5f8f",
+    hot:"#c0561f", warm:"#4a4a4a", cold:"#b9c2c8",
+    "hot-bg":"#fbeee6", "warm-bg":"#eef0f1", "cold-bg":"#f3f6f7",
+    danger:"#b3261e", "danger-bg":"#fbeae8",
+    "surface-sunken":"#f5f8fa", "surface-hover":"#eef4f7",
+    "chart-lo":"#8ec9d9", "chart-lo2":"#bfe0ea",
+    "shadow-rgb":"28 46 56", "shadow-flood":"rgb(28,46,56)", dot:"#e9edf0",
+  }},
+};
+function currentTheme(){
+  const k = DB && DB.settings && DB.settings.theme;
+  return THEMES[k] ? k : "rose";
+}
+function themeVar(name){ return THEMES[currentTheme()].vars[name]; }
 /* 舊版本的預設色。裝置上存的值如果還等於這些，代表使用者沒自訂過，
    換品牌配色時要跟著更新；真的自訂過的顏色保留不動 */
 const LEGACY_WARMTH = [
@@ -741,12 +824,14 @@ function upgradeLegacyColors(){
 }
 function warmthColor(k){
   const c = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
-  return c || DEFAULT_WARMTH[k];
+  return c || themeVar(k);
 }
 function partnerColor(){
-  return (DB && DB.settings && DB.settings.partnerColor) || DEFAULT_PARTNER;
+  return (DB && DB.settings && DB.settings.partnerColor) || themeVar("partner");
 }
 function applySkin(){
+  const vars = THEMES[currentTheme()].vars;
+  Object.keys(vars).forEach(k => document.body.style.setProperty("--" + k, vars[k]));
   ["hot", "warm", "cold"].forEach(k => {
     const custom = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
     if (custom) document.body.style.setProperty("--" + k, custom);
@@ -771,23 +856,25 @@ function inlineRename(el, current, onDone){
   inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
 }
 /* 關係線：色相刻意拉開，再各配不同虛線樣式，讓線在小螢幕上不只能靠顏色分辨 */
+/* 低彩度色盤：六種關係彼此分得出來，又不會在柔和配色裡刺眼 */
 const DEFAULT_RELTYPES = [
-  {key:"upline",    label:"上線",   directed:true,  color:"#0f766e", dash:"",      builtin:true, tree:true},
-  {key:"intro",     label:"介紹人", directed:true,  color:"#c81d1d", dash:"",      builtin:true},
-  {key:"family",    label:"家人",   directed:false, color:"#7c3aed", dash:"9 5",   builtin:true},
-  {key:"friend",    label:"朋友",   directed:false, color:"#15803d", dash:"",      builtin:true},
-  {key:"colleague", label:"同事",   directed:false, color:"#b45309", dash:"2 5",   builtin:true},
-  {key:"club",      label:"其他",   directed:false, color:"#64748b", dash:"12 4 3 4", builtin:true},
+  {key:"upline",    label:"上線",   directed:true,  color:"#6d7c8a", dash:"",      builtin:true, tree:true},
+  {key:"intro",     label:"介紹人", directed:true,  color:"#b8503f", dash:"",      builtin:true},
+  {key:"family",    label:"家人",   directed:false, color:"#8c6d8f", dash:"9 5",   builtin:true},
+  {key:"friend",    label:"朋友",   directed:false, color:"#7d8a6a", dash:"",      builtin:true},
+  {key:"colleague", label:"同事",   directed:false, color:"#a8834c", dash:"2 5",   builtin:true},
+  {key:"club",      label:"其他",   directed:false, color:"#8a7f7d", dash:"12 4 3 4", builtin:true},
 ];
-/* 舊版低飽和配色：使用者沒自訂過的話，載入時自動升級成上面的新色 */
+/* 歷代預設色：使用者沒自訂過的話，載入時自動升級成上面的新色 */
 const LEGACY_RELTYPE_COLORS = {
-  upline:"#1f6f8b", family:"#7a6172", friend:"#5c7a68", colleague:"#48606e", club:"#8c7a52",
+  upline:["#1f6f8b", "#0f766e"], intro:["#c81d1d"], family:["#7a6172", "#7c3aed"],
+  friend:["#5c7a68", "#15803d"], colleague:["#48606e", "#b45309"], club:["#8c7a52", "#64748b"],
 };
 /* 曾用過的預設名稱：使用者沒自己改過的話，載入時跟著改版更新成現行預設名 */
 const LEGACY_RELTYPE_LABELS = {
   club: ["同社團", "同公司"],
 };
-const CUSTOM_COLORS = ["#be185d","#4338ca","#a16207","#0e7490","#7c2d12","#4d7c0f"];
+const CUSTOM_COLORS = ["#9c6b7d","#5f7a8c","#8a7a4f","#6d8a72","#8c6d8f","#a8705a"];
 const CUSTOM_DASHES = ["5 4", "", "10 4", "2 4", "8 3 2 3", "6 6"];
 
 let DB = null;
@@ -917,9 +1004,9 @@ function migrate(d){
         .map(t => {
           const def = DEFAULT_RELTYPES.find(x => x.key === t.key);
           // 還停在舊版低飽和色（沒自訂過）就升級成新配色，並補上虛線樣式
-          const legacy = LEGACY_RELTYPE_COLORS[t.key];
+          const legacy = LEGACY_RELTYPE_COLORS[t.key] || [];
           const color = isColor(t.color)
-            ? ((legacy && t.color.toLowerCase() === legacy.toLowerCase() && def) ? def.color : t.color)
+            ? ((def && legacy.some(L => t.color.toLowerCase() === L.toLowerCase())) ? def.color : t.color)
             : (def ? def.color : "#888888");
           // 名稱同理：還停在舊版預設名（沒自訂過）就更新成現行預設名
           const oldLabels = LEGACY_RELTYPE_LABELS[t.key] || [];
@@ -933,6 +1020,7 @@ function migrate(d){
   DEFAULT_RELTYPES.forEach(t => { if (!have.has(t.key)) types.push(JSON.parse(JSON.stringify(t))); });
   base.relationTypes = types;
 
+  if (THEMES[st.theme]) base.settings.theme = st.theme;
   base.lastBackupAt = isStr(d.lastBackupAt) ? d.lastBackupAt : null;
   base._dropped = Object.values(dropped).some(n => n > 0) ? dropped : null;
   return base;
@@ -3068,7 +3156,7 @@ function renderGraph(){
   const R = 27;
   const defs = `<defs>
     <filter id="nsh" x="-40%" y="-40%" width="180%" height="180%">
-      <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="rgb(60,42,40)" flood-opacity="0.26"/>
+      <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" style="flood-color:var(--shadow-flood)" flood-opacity="0.26"/>
     </filter>
     <radialGradient id="gsheen" cx="34%" cy="28%" r="74%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.40"/>
@@ -3394,6 +3482,16 @@ function renderSettings(){
       `<input type="color" class="colorpick" id="wc-${k}" value="${warmthColor(k)}">`).join("") +
     `<span class="grow"></span><button class="btn small" id="wc-reset">恢復預設</button>`;
 
+  const trow = document.getElementById("theme-row");
+  if (trow){
+    trow.innerHTML = Object.keys(THEMES).map(k =>
+      `<button class="thm${currentTheme() === k ? " on" : ""}" data-theme="${k}">
+        <span class="sw" style="background:${THEMES[k].vars.accent};"></span>${esc(THEMES[k].label)}</button>`).join("");
+    trow.querySelectorAll("[data-theme]").forEach(btn => btn.addEventListener("click", () => {
+      DB.settings.theme = btn.dataset.theme;
+      save(); applySkin(); renderSettings();
+    }));
+  }
   ["hot", "warm", "cold"].forEach(k => {
     const inp = document.getElementById("wc-" + k);
     inp.value = warmthColor(k);
