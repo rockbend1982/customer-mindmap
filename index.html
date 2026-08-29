@@ -307,7 +307,8 @@ body.theme-sketch .todo-check{border-radius:50% 48% 52% 50% / 50% 52% 48% 50%; b
   display:flex; align-items:center; justify-content:center; color:var(--ink-soft); cursor:pointer;
 }
 .todo-check:active{background:var(--surface-hover); color:var(--accent);}
-.qa{display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-top:14px;}
+/* 下面接的是卡片，卡片只有 margin-bottom，這裡不補就會貼在一起 */
+.qa{display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin:14px 0;}
 .qa button{
   display:flex; flex-direction:column; align-items:center; gap:7px; padding:12px 3px 10px;
   border:1px solid var(--card-line); border-radius:14px; background:var(--card);
@@ -1803,6 +1804,46 @@ function todoTag(days){
   return `<span class="todo-tag soon">${days} 天後</span>`;
 }
 /* 一列＝一個人一件事：熟度色點、姓名、狀態、下面一行為什麼要動他 */
+/* 未來要做的事（待辦／生日／該回購）。首頁的「接下來」預覽與點開後的清單共用這一份，
+   兩邊各算一次遲早會對不上 */
+function upcomingItems(){
+  const out = [];
+  openTasks().forEach(t => {
+    const c = getCustomer(t.customerId);
+    const d = daysUntil(t.due);
+    if (!c || d <= 0) return;
+    out.push({days:d, c, why:"待辦・" + esc(t.text), taskId:t.id});
+  });
+  DB.customers.forEach(c => {
+    const bd = birthdayInDays(c, 7);
+    if (bd !== null && bd > 0) out.push({days:bd, c, why:"生日・傳一句祝賀", taskId:null});
+    const rp = repurchaseDue(c.id);
+    if (rp && rp.days > 0) out.push({days:rp.days, c, why:"該回購・" + esc(rp.item), taskId:null});
+  });
+  return out.sort((a, b) => a.days - b.days || a.c.name.localeCompare(b.c.name));
+}
+function upcomingDayName(d){ return d === 1 ? "明天" : d === 2 ? "後天" : d + " 天後"; }
+
+function openUpcoming(){
+  const all = upcomingItems();
+  const within = all.filter(x => x.days <= 7);
+  const later = all.filter(x => x.days > 7);
+  const byDay = arr => {
+    const g = {};
+    arr.forEach(x => { (g[x.days] = g[x.days] || []).push(x); });
+    return Object.keys(g).map(Number).sort((a, b) => a - b)
+      .map(d => `<div class="card-title" style="margin-top:14px;">${esc(upcomingDayName(d))}（${g[d].length}）</div>`
+        + g[d].map(x => todoRow(x.c, x.days, x.why, x.taskId)).join("")).join("");
+  };
+  openSheet("接下來", within.length || later.length
+    ? byDay(within) + (later.length
+        ? `<div class="card-title" style="margin-top:14px;">更遠（${later.length}）</div>`
+          + later.map(x => todoRow(x.c, x.days, x.why, x.taskId)).join("")
+        : "")
+    : `<div class="empty">接下來沒有排到的事。<br>記互動時可以順手填「下次跟進」。</div>`);
+  bindTaskButtons(sheetEl, openUpcoming);
+}
+
 function todoRow(c, days, why, taskId){
   return `<div class="todo-row">
     <span class="todo-dot" style="background:${warmthColor(WARMTH[c.warmth] ? c.warmth : "warm")};"></span>
@@ -1855,16 +1896,16 @@ function renderHomeToday(){
 
   items.sort((a, b) => a.sort - b.sort);
   // 未來 7 天預覽：一眼看到接下來幾天的量，不用切視圖
-  const ahead = openTasks().map(t => daysUntil(t.due)).concat(soon).filter(d => d > 0 && d <= 7);
-  const dayName = d => d === 1 ? "明天" : d === 2 ? "後天" : d + " 天後";
+  const upcoming = upcomingItems();
   const grouped = {};
-  ahead.forEach(d => { grouped[d] = (grouped[d] || 0) + 1; });
-  const laterCount = openTasks().filter(t => daysUntil(t.due) > 7).length;
+  upcoming.filter(x => x.days <= 7).forEach(x => { grouped[x.days] = (grouped[x.days] || 0) + 1; });
+  const laterCount = upcoming.filter(x => x.days > 7).length;
   const preview = Object.keys(grouped).map(Number).sort((a, b) => a - b)
-    .map(d => `${dayName(d)} ${grouped[d]} 件`).join("・");
+    .map(d => `${upcomingDayName(d)} ${grouped[d]} 件`).join("・");
   const aheadLine = (preview || laterCount)
-    ? `<hr class="card-divider"><div class="muted">接下來：${esc(preview || "7 天內沒有待辦")}` +
-      (laterCount ? `　<span style="opacity:.75;">更遠還有 ${laterCount} 件</span>` : "") + `</div>`
+    ? `<hr class="card-divider"><div class="muted" id="open-upcoming" style="cursor:pointer;">接下來：${esc(preview || "7 天內沒有待辦")}` +
+      (laterCount ? `　<span style="opacity:.75;">更遠還有 ${laterCount} 件</span>` : "") +
+      `<span style="float:right; opacity:.6;">看是哪幾件 ›</span></div>`
     : "";
 
   const allCount = openTasks().length;
@@ -1880,6 +1921,8 @@ function renderHomeToday(){
         <div class="muted" style="margin-top:8px;">今天沒有要動的事。</div>${aheadLine}</div>` : "");
   const allBtn = document.getElementById("open-all-tasks");
   if (allBtn) allBtn.addEventListener("click", openAllTasks);
+  const upBtn = document.getElementById("open-upcoming");
+  if (upBtn) upBtn.addEventListener("click", openUpcoming);
 
   bindTaskButtons(box, renderHome);
 }
