@@ -220,23 +220,23 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 #graph-wrap.lite{--weave-a:0; --weave-b:0;}
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
-.gnode circle{stroke-width:2.5;}
+.gnode rect{stroke-width:2.5;}
 .gnode.dim{opacity:.22;}
 .gedge.dim{opacity:.12;}
 input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radius:6px;}
 .rename{text-decoration:underline dotted; text-underline-offset:3px; cursor:pointer;}
 .gnode.sleep{opacity:.45;}
-.gnode.sleep circle{stroke:#9aa2a9; stroke-dasharray:4 3;}
+.gnode.sleep rect{stroke:#9aa2a9; stroke-dasharray:4 3;}
 #focus-bar{
   position:absolute; left:10px; right:10px; bottom:12px; display:none;
   align-items:center; gap:8px; flex-wrap:wrap;
   background:var(--card); border:1px solid var(--card-line); border-radius:12px;
   padding:10px 12px; box-shadow:0 4px 18px rgba(0,0,0,.10);
 }
-.ghull rect{pointer-events:none;}
+.ghull rect, .ghull path{pointer-events:none;}
 .ghull.dim{opacity:.3;}
 .glabel{
-  fill:var(--ink-soft); font-weight:700; text-anchor:start; pointer-events:none; letter-spacing:1px;
+  fill:var(--ink-soft); font-weight:700; text-anchor:middle; pointer-events:none; letter-spacing:1px;
   paint-order:stroke; stroke:var(--paper); stroke-width:3.5px; stroke-linejoin:round;
 }
 .slabel{
@@ -3129,7 +3129,62 @@ function updateFocusBar(id){
   document.getElementById("fb-close").onclick = () => { gFocus = null; gFocusDepth = 1; renderGraph(); };
 }
 
-const HULL_PAD = 44;
+/* 凸包（Andrew monotone chain）：群組布塊輪廓的骨架 */
+function convexHull(pts){
+  if (pts.length < 3) return pts.slice();
+  const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [];
+  for (const q of p){ while (lo.length >= 2 && cr(lo[lo.length-2], lo[lo.length-1], q) <= 0) lo.pop(); lo.push(q); }
+  const up = [];
+  for (let i = p.length - 1; i >= 0; i--){ const q = p[i]; while (up.length >= 2 && cr(up[up.length-2], up[up.length-1], q) <= 0) up.pop(); up.push(q); }
+  lo.pop(); up.pop();
+  return lo.concat(up);
+}
+/* 把輪廓從質心往外推 pad：節點都落在頂點上，推滿 pad 就不會被邊切到 */
+function inflateHull(hull, pad){
+  const n = hull.length;
+  const cx = hull.reduce((s, p) => s + p.x, 0) / n, cy = hull.reduce((s, p) => s + p.y, 0) / n;
+  return hull.map(p => {
+    const vx = p.x - cx, vy = p.y - cy, L = Math.hypot(vx, vy) || 1;
+    const j = 1 + ((Math.round(Math.abs(p.x) * 7 + Math.abs(p.y) * 13) % 21) - 10) / 110;
+    return {x: p.x + vx / L * pad * j, y: p.y + vy / L * pad * j};
+  });
+}
+/* 圓角多邊形：邊走直線、轉角用二次貝茲抹圓。
+   用邊中點起筆的畫法曲線會整個往內縮，人少的群會塌成一條扭曲的帶子 */
+function smoothClosedPath(pts, r){
+  const n = pts.length;
+  if (n < 3) return "";
+  const lerp = (a, b, t) => ({x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t});
+  let d = "";
+  for (let i = 0; i < n; i++){
+    const prev = pts[(i - 1 + n) % n], p = pts[i], next = pts[(i + 1) % n];
+    const lp = Math.hypot(p.x - prev.x, p.y - prev.y) || 1;
+    const ln = Math.hypot(next.x - p.x, next.y - p.y) || 1;
+    const a = lerp(p, prev, Math.min(0.45, r / lp));
+    const b = lerp(p, next, Math.min(0.45, r / ln));
+    d += (i ? "L" : "M") + a.x.toFixed(1) + " " + a.y.toFixed(1)
+       + " Q" + p.x.toFixed(1) + " " + p.y.toFixed(1) + " " + b.x.toFixed(1) + " " + b.y.toFixed(1) + " ";
+  }
+  return d + "Z";
+}
+/* 織片：每片布縫上去的角度都差一點，由 id 決定所以不會每次重畫都在抖 */
+function patchTilt(id){
+  let h = 0; const s = String(id);
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+  return ((h % 81) - 40) / 10;
+}
+/* 從織片中心沿 ang 射出，打到邊界的距離（含歪斜與圓角修正）——連線端點用 */
+function patchReach(half, ang, tilt){
+  const a = ang - tilt * Math.PI / 180;
+  const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+  const mx = Math.max(c, s, 1e-6), mn = Math.min(c, s);
+  return half / mx - half * 0.26 * (mn / mx) * 0.42;
+}
+
+const HULL_PAD = 58;
+const NODE_HALO = 30;   // 織片外圈半徑：輪廓要包住的是布片本身，不是一個沒有大小的點
 /* 群組區塊：ids、外框範圍、群名。hull 繪製與自動縮放共用同一份計算 */
 function groupBlocks(vis){
   if (gMode !== "net" || vis.length < 2) return [];
@@ -3140,9 +3195,14 @@ function groupBlocks(vis){
   if (blocks.length < 2) return [];
   return blocks.map(b => {
     let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    const pts = [];
     b.ids.forEach(id => {
       const c = getCustomer(id); if (!c) return;
       const pt = nodePos(c); if (!pt) return;
+      for (let a = 0; a < 8; a++){
+        pts.push({x: pt.x + Math.cos(a * Math.PI / 4) * NODE_HALO,
+                  y: pt.y + Math.sin(a * Math.PI / 4) * NODE_HALO});
+      }
       minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
       minY = Math.min(minY, pt.y); maxY = Math.max(maxY, pt.y);
     });
@@ -3163,29 +3223,63 @@ function groupBlocks(vis){
       }
     }
     return Object.assign({}, b, {
+      pts,
       x1:minX - HULL_PAD, y1:minY - HULL_PAD, x2:maxX + HULL_PAD, y2:maxY + HULL_PAD,
       label: title + "　" + b.ids.length + " 人",
     });
   }).filter(Boolean);
 }
 
+/* 群名寬度：中文一格、半形約六成。一律當 0.78 會讓中文標題溢出方框、避讓也判不到 */
+function labelWidth(s, hs){
+  let w = 0;
+  for (const ch of String(s)) w += /[\x00-\xff]/.test(ch) ? 0.58 : 1;
+  return w * hs + hs * 0.9;
+}
+
+/* 群名方框的位置。上緣高度接近的群名會疊在一起，一行一行往上讓開 */
+function groupLabelBoxes(blocks, hs){
+  const out = [];
+  blocks.forEach(b => {
+    const w = labelWidth(b.label, hs), h = hs * 1.5;
+    const x1 = (b.x1 + b.x2) / 2 - w / 2;
+    let y1 = b.y1 - hs * 1.62;
+    for (let k = 0; k < 6; k++){
+      if (!out.some(q => x1 < q.x2 && x1 + w > q.x1 && y1 < q.y2 && y1 + h > q.y1)) break;
+      y1 -= h * 1.15;
+    }
+    out.push({x1, y1, x2: x1 + w, y2: y1 + h, w, h});
+  });
+  return out;
+}
+
 function groupHullsSVG(vis){
   const blocks = groupBlocks(vis);
   if (!blocks.length) return "";
   const hs = Math.min(80, 13 / Math.max(gview.s, 0.12));
-  return blocks.map(b => {
+  const boxes = groupLabelBoxes(blocks, hs);
+  return blocks.map((b, i) => {
     const dim = gFocus && !b.ids.includes(gFocus);
-    return `<g class="ghull ${dim ? "dim" : ""}">
-      <rect x="${b.x1}" y="${b.y1}" width="${b.x2 - b.x1}" height="${b.y2 - b.y1}"
+    const lb = boxes[i];
+    // 凸包點不足三個（同座標重疊）畫不成塊，退回原本的圓角矩形
+    const hull = inflateHull(convexHull(b.pts), HULL_PAD - NODE_HALO);
+    const d = smoothClosedPath(hull, HULL_PAD * 0.8);
+    const shape = d
+      ? `<path d="${d}" fill="var(--accent)" fill-opacity="0.045"
+        stroke="var(--accent)" stroke-opacity="0.3" stroke-width="1.2" stroke-dasharray="6 5"
+        stroke-linecap="round" vector-effect="non-scaling-stroke"/>`
+      : `<rect x="${b.x1}" y="${b.y1}" width="${b.x2 - b.x1}" height="${b.y2 - b.y1}"
         rx="${Math.round(HULL_PAD * 0.9)}" fill="var(--accent)" fill-opacity="0.045"
         stroke="var(--accent)" stroke-opacity="0.3" stroke-width="1.2" stroke-dasharray="6 5"
-        stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-      <rect x="${b.x1 + 4}" y="${(b.y1 - hs * 1.62).toFixed(1)}"
-        width="${(String(b.label).length * hs * 0.78 + hs * 0.9).toFixed(1)}" height="${(hs * 1.5).toFixed(1)}"
+        stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+    return `<g class="ghull ${dim ? "dim" : ""}">
+      ${shape}
+      <rect x="${lb.x1.toFixed(1)}" y="${lb.y1.toFixed(1)}"
+        width="${lb.w.toFixed(1)}" height="${lb.h.toFixed(1)}"
         rx="${(hs * 0.75).toFixed(1)}" fill="var(--card)" stroke="var(--accent)" stroke-opacity="0.22"
         vector-effect="non-scaling-stroke"/>
-      <text class="glabel" x="${b.x1 + 4 + hs * 0.45}" y="${(b.y1 - hs * 0.5).toFixed(1)}"
-        font-size="${hs.toFixed(1)}" stroke="none">${esc(b.label)}</text>
+      <text class="glabel" x="${(lb.x1 + lb.w / 2).toFixed(1)}" y="${(lb.y1 + hs * 1.12).toFixed(1)}"
+        text-anchor="middle" font-size="${hs.toFixed(1)}" stroke="none">${esc(b.label)}</text>
     </g>`;
   }).join("");
 }
@@ -3206,7 +3300,7 @@ function contentBounds(list, sc){
     minX = Math.min(minX, a); minY = Math.min(minY, b);
     maxX = Math.max(maxX, c); maxY = Math.max(maxY, d);
   };
-  const R = 27;
+  const R = 34;                       // 織片是方的，量到角比圓的半徑遠，fit 時要多留一點
   const ns = Math.min(72, 12 / Math.max(sc, 0.12));
   list.forEach(c => {
     const pt = nodePos(c); if (!pt) return;
@@ -3218,9 +3312,9 @@ function contentBounds(list, sc){
     add(pt.x - halfW, pt.y - R, pt.x + halfW, pt.y + R + ns * (gMode === "org" ? 2.9 : 1.3));
   });
   const hs = Math.min(80, 13 / Math.max(sc, 0.12));
-  groupBlocks(list).forEach(b => {
-    add(b.x1, b.y1 - hs * 1.4, Math.max(b.x2, b.x1 + 12 + b.label.length * hs * 0.9), b.y2);
-  });
+  const gbs = groupBlocks(list);
+  gbs.forEach(b => add(b.x1, b.y1, b.x2, b.y2));
+  groupLabelBoxes(gbs, hs).forEach(lb => add(lb.x1, lb.y1, lb.x2, lb.y2));
   return {minX, minY, maxX, maxY};
 }
 
@@ -3273,6 +3367,9 @@ function renderGraph(){
   const degree = {};
   rels.forEach(r => { degree[r.from] = (degree[r.from] || 0) + 1; degree[r.to] = (degree[r.to] || 0) + 1; });
   const rOf = id => R * (1 + Math.min(degree[id] || 0, 6) * 0.05);
+  // 織片半邊長：跟原本的圓等面積看起來會偏大，收到 0.88 倍量體才相當
+  const hOf = id => (id === "__me__" ? R * 1.12 : rOf(id)) * 0.88;
+  const reachOf = (id, ang) => patchReach(hOf(id), ang, patchTilt(id));
   /* 分級呈現：縮得小就少畫字，人多就少畫層次——設計稿給的三段式降級 */
   const lod = {
     // 門檻照本專案的縮放尺度校準過：一進關係圖 fit 完通常落在 0.35 左右，
@@ -3308,16 +3405,14 @@ function renderGraph(){
   const ns0 = Math.min(72, 12 / Math.max(gview.s, 0.12));
   const taken = drawList.map(c => {
     const p = nodePos(c);
-    const half = String(c.name || "").length * ns0 * 0.55 + ns0 * 0.25;
+    const half = Math.max(hOf(c.id) * 1.42,
+      String(c.name || "").length * ns0 * 0.55 + ns0 * 0.25);
     return {x1: p.x - half, x2: p.x + half,
-            y1: p.y - R, y2: p.y + R + ns0 * (gMode === "org" ? 2.75 : 1.25)};
+            y1: p.y - R, y2: p.y + R + 9.5 + ns0 * (gMode === "org" ? 2.7 : 1.2)};
   });
   // 群名標題貼在群框上緣，也是關係標籤不能壓的字
-  groupBlocks(vis).forEach(b => {
-    const hs = Math.min(80, 13 / Math.max(gview.s, 0.12));
-    taken.push({x1: b.x1 + 8, x2: b.x1 + 12 + String(b.label || "").length * hs * 0.62,
-                y1: b.y1 - hs * 1.25, y2: b.y1});
-  });
+  groupLabelBoxes(groupBlocks(vis), Math.min(80, 13 / Math.max(gview.s, 0.12)))
+    .forEach(lb => taken.push(lb));
   const hitsTaken = (x, y, hw, hh) => taken.some(b =>
     x + hw > b.x1 && x - hw < b.x2 && y + hh > b.y1 && y - hh < b.y2);
 
@@ -3341,10 +3436,11 @@ function renderGraph(){
     if (r.from > r.to) spread = -spread;
     const baseAng = Math.atan2(dy, dx);
     const fan = spread * 0.44;                          // 端點扇開角度（弧度）
-    const rEnd = rOf(r.to) + (t.directed ? 5 : 0);
     const a1 = baseAng + fan, a2 = baseAng + Math.PI - fan;
-    const x1 = pa.x + Math.cos(a1) * rOf(r.from), y1 = pa.y + Math.sin(a1) * rOf(r.from);
-    const x2 = pb.x + Math.cos(a2) * rEnd, y2 = pb.y + Math.sin(a2) * rEnd;
+    // 織片是方的，端點要沿角度打在布邊上，不能再用單一半徑
+    const d1 = reachOf(r.from, a1), d2 = reachOf(r.to, a2) + (t.directed ? 5 : 0);
+    const x1 = pa.x + Math.cos(a1) * d1, y1 = pa.y + Math.sin(a1) * d1;
+    const x2 = pb.x + Math.cos(a2) * d2, y2 = pb.y + Math.sin(a2) * d2;
     const off = (lod.straight && nPair < 2) ? 0 : spread * (30 / Math.max(gview.s, 0.12));
     const nx = -dy / d, ny = dx / d;
     const cx = (x1 + x2) / 2 + nx * off, cy = (y1 + y2) / 2 + ny * off;
@@ -3389,7 +3485,7 @@ function renderGraph(){
     // 空間夠不夠要用「標籤實際寬度」判斷，不能只看線長門檻：
     // 舊版對多重關係開例外強制顯示，短邊上兩個標籤會互相壓、還蓋住姓名
     const labelPx = t.label.length * ls * gview.s * 0.62;   // 標籤螢幕寬度估算
-    const edgePx = (d - rOf(r.from) - rOf(r.to)) * gview.s;   // 可見線段螢幕長度
+    const edgePx = (d - d1 - d2) * gview.s;                  // 可見線段螢幕長度
     // 箭頭大小依「佔線長比例」決定：大箭頭約 10px、小箭頭約 6px。
     // 用絕對像素一刀切會把單一關係的短邊也連坐，方向資訊整片消失
     const arrowMark = !t.directed ? null : (edgePx > 34 ? "arrow-" : edgePx > 16 ? "arrows-" : null);
@@ -3422,7 +3518,6 @@ function renderGraph(){
 
   const nodes = drawList.map(c => {
     const isMe = c.id === "__me__";
-    const rN = isMe ? R * 1.12 : rOf(c.id);
     const pt = nodePos(c);
     const wc = isMe ? "#3a3436" : warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
     const initial = isMe ? "我" : String(c.name || "").slice(0, 1);
@@ -3437,24 +3532,30 @@ function renderGraph(){
     const hit = !isMe && gFocus === c.id;
     // 姓名一律畫在圓下方（反向縮放，螢幕字級恆定），圓本身只當熟度色點，不再重複放字
     const ns = Math.min(72, 12 / Math.max(gview.s, 0.12));
+    const hN = hOf(c.id), tilt = patchTilt(c.id);
+    const sq = h => `x="${(-h).toFixed(1)}" y="${(-h).toFixed(1)}" width="${(h * 2).toFixed(1)}"`
+      + ` height="${(h * 2).toFixed(1)}" rx="${(h * 0.26).toFixed(1)}" transform="rotate(${tilt})"`;
     const partner = !isMe && isPartner(c);
     const subTxt = gMode === "org" ? orgSubLabel(c) : "";
     const sub = subTxt
-      ? `<text class="slabel" y="${(rN + ns * 2.35).toFixed(1)}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
+      ? `<text class="slabel" y="${(hN + 9.5 + ns * 2.35).toFixed(1)}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" ${isMe ? "" : `data-nid="${esc(c.id)}"`} transform="translate(${pt.x},${pt.y})">
-      ${hit ? `<circle r="${(rN + 9).toFixed(1)}" fill="none" stroke="var(--accent)" stroke-opacity="0.55"
+      ${hit ? `<rect ${sq(hN + 11)} fill="none" stroke="var(--accent)" stroke-opacity="0.55"
         stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` : ""}
-      ${partner ? `<circle r="${(rN + 5).toFixed(1)}" fill="none" stroke="${partnerColor()}" stroke-width="1.8"
+      ${partner ? `<rect ${sq(hN + 7.5)} fill="none" stroke="${partnerColor()}" stroke-width="1.8"
         stroke-dasharray="4.5 3.5" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.95"/>` : ""}
-      <circle r="${rN}" fill="${wc}" fill-opacity="${bead.fo}" stroke="${bead.stroke}"
+      <rect ${sq(hN)} fill="${wc}" fill-opacity="${bead.fo}" stroke="${bead.stroke}"
         stroke-width="${bead.sw}" vector-effect="non-scaling-stroke"
         ${hit ? 'filter="url(#nglow)"' : 'filter="url(#nsh)"'}/>
-      ${lod.sheen ? `<circle r="${rN}" fill="url(#gsheen)" stroke="none" pointer-events="none"/>` : ""}
-      <text class="ninit" y="${(rN * 0.33).toFixed(1)}" font-size="${(rN * 0.8).toFixed(1)}"
+      ${lod.sheen ? `<rect ${sq(hN)} fill="url(#gsheen)" stroke="none" pointer-events="none"/>
+      <rect ${sq(hN - 5.5)} fill="none" stroke="${bead.fo > 0.5 ? "#ffffff" : bead.stroke}" stroke-opacity="0.26"
+        stroke-width="0.8" stroke-dasharray="1.5 3.5" stroke-linecap="round"
+        vector-effect="non-scaling-stroke" pointer-events="none"/>` : ""}
+      <text class="ninit" y="${(hN * 0.36).toFixed(1)}" font-size="${(hN * 0.9).toFixed(1)}"
         fill="${bead.fo > 0.5 ? readableOn(wc) : "var(--ink)"}" opacity="${bead.fo > 0.5 ? 1 : 0.72}">${esc(initial)}</text>
       ${(lod.names || partner || hit || isMe)
-        ? `<text class="nlabel" y="${(rN + ns * 0.95).toFixed(1)}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>` : ""}
+        ? `<text class="nlabel" y="${(hN + 9.5 + ns * 0.9).toFixed(1)}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>` : ""}
       ${sub}
     </g>`;
   }).join("");
