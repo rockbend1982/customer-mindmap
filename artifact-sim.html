@@ -209,13 +209,13 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 #graph-wrap.lite{--weave-a:0; --weave-b:0;}
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
-.gnode rect{stroke-width:2.5;}
+.gnode rect, .gnode circle{stroke-width:2.5;}
 .gnode.dim{opacity:.22;}
 .gedge.dim{opacity:.12;}
 input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radius:6px;}
 .rename{text-decoration:underline dotted; text-underline-offset:3px; cursor:pointer;}
 .gnode.sleep{opacity:.45;}
-.gnode.sleep rect{stroke:#9aa2a9; stroke-dasharray:4 3;}
+.gnode.sleep rect, .gnode.sleep circle{stroke:#9aa2a9; stroke-dasharray:4 3;}
 #focus-bar{
   position:absolute; left:10px; right:10px; bottom:12px; display:none;
   align-items:center; gap:8px; flex-wrap:wrap;
@@ -516,6 +516,8 @@ details.detfold > div{padding:0 0 14px;}
         <div class="card-lead" style="margin-bottom:10px;"><span class="bar"></span><span class="t">外觀</span></div>
         <label>配色主題</label>
         <div class="themes" id="theme-row"></div>
+        <label>關係圖的節點形狀</label>
+        <div class="themes" id="shape-row"></div>
         <label>熟度顏色（點色塊修改）</label>
         <div class="row" id="warmth-row"></div>
         <label>夥伴外框顏色（關係圖節點外環、名單與詳情的夥伴徽章）</label>
@@ -1073,6 +1075,7 @@ function migrate(d){
   base.relationTypes = types;
 
   if (THEMES[st.theme]) base.settings.theme = st.theme;
+  if (NODE_SHAPES[st.nodeShape]) base.settings.nodeShape = st.nodeShape;
   base.lastBackupAt = isStr(d.lastBackupAt) ? d.lastBackupAt : null;
   base._dropped = Object.values(dropped).some(n => n > 0) ? dropped : null;
   return base;
@@ -3157,14 +3160,23 @@ function smoothClosedPath(pts, r){
   }
   return d + "Z";
 }
+/* 節點形狀兩種都留著，讓使用者自己挑 */
+const NODE_SHAPES = {patch: "織片（方形）", round: "圓珠"};
+function currentShape(){
+  const k = DB && DB.settings ? DB.settings.nodeShape : null;
+  return NODE_SHAPES[k] ? k : "patch";
+}
+
 /* 織片：每片布縫上去的角度都差一點，由 id 決定所以不會每次重畫都在抖 */
 function patchTilt(id){
+  if (currentShape() === "round") return 0;
   let h = 0; const s = String(id);
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
   return ((h % 81) - 40) / 10;
 }
 /* 從織片中心沿 ang 射出，打到邊界的距離（含歪斜與圓角修正）——連線端點用 */
 function patchReach(half, ang, tilt){
+  if (currentShape() === "round") return half;
   const a = ang - tilt * Math.PI / 180;
   const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
   const mx = Math.max(c, s, 1e-6), mn = Math.min(c, s);
@@ -3356,7 +3368,7 @@ function renderGraph(){
   rels.forEach(r => { degree[r.from] = (degree[r.from] || 0) + 1; degree[r.to] = (degree[r.to] || 0) + 1; });
   const rOf = id => R * (1 + Math.min(degree[id] || 0, 6) * 0.05);
   // 織片半邊長：跟原本的圓等面積看起來會偏大，收到 0.88 倍量體才相當
-  const hOf = id => (id === "__me__" ? R * 1.12 : rOf(id)) * 0.88;
+  const hOf = id => (id === "__me__" ? R * 1.12 : rOf(id)) * (currentShape() === "round" ? 1 : 0.88);
   const reachOf = (id, ang) => patchReach(hOf(id), ang, patchTilt(id));
   /* 分級呈現：縮得小就少畫字，人多就少畫層次——設計稿給的三段式降級 */
   const lod = {
@@ -3521,23 +3533,25 @@ function renderGraph(){
     // 姓名一律畫在圓下方（反向縮放，螢幕字級恆定），圓本身只當熟度色點，不再重複放字
     const ns = Math.min(72, 12 / Math.max(gview.s, 0.12));
     const hN = hOf(c.id), tilt = patchTilt(c.id);
-    const sq = h => `x="${(-h).toFixed(1)}" y="${(-h).toFixed(1)}" width="${(h * 2).toFixed(1)}"`
-      + ` height="${(h * 2).toFixed(1)}" rx="${(h * 0.26).toFixed(1)}" transform="rotate(${tilt})"`;
+    const TAG = currentShape() === "round" ? "circle" : "rect";
+    const sq = h => TAG === "circle" ? `r="${h.toFixed(1)}"`
+      : `x="${(-h).toFixed(1)}" y="${(-h).toFixed(1)}" width="${(h * 2).toFixed(1)}"`
+        + ` height="${(h * 2).toFixed(1)}" rx="${(h * 0.26).toFixed(1)}" transform="rotate(${tilt})"`;
     const partner = !isMe && isPartner(c);
     const subTxt = gMode === "org" ? orgSubLabel(c) : "";
     const sub = subTxt
       ? `<text class="slabel" y="${(hN + 9.5 + ns * 2.35).toFixed(1)}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" ${isMe ? "" : `data-nid="${esc(c.id)}"`} transform="translate(${pt.x},${pt.y})">
-      ${hit ? `<rect ${sq(hN + 11)} fill="none" stroke="var(--accent)" stroke-opacity="0.55"
+      ${hit ? `<${TAG} ${sq(hN + 11)} fill="none" stroke="var(--accent)" stroke-opacity="0.55"
         stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` : ""}
-      ${partner ? `<rect ${sq(hN + 7.5)} fill="none" stroke="${partnerColor()}" stroke-width="1.8"
+      ${partner ? `<${TAG} ${sq(hN + 7.5)} fill="none" stroke="${partnerColor()}" stroke-width="1.8"
         stroke-dasharray="4.5 3.5" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.95"/>` : ""}
-      <rect ${sq(hN)} fill="${wc}" fill-opacity="${bead.fo}" stroke="${bead.stroke}"
+      <${TAG} ${sq(hN)} fill="${wc}" fill-opacity="${bead.fo}" stroke="${bead.stroke}"
         stroke-width="${bead.sw}" vector-effect="non-scaling-stroke"
         ${hit ? 'filter="url(#nglow)"' : 'filter="url(#nsh)"'}/>
-      ${lod.sheen ? `<rect ${sq(hN)} fill="url(#gsheen)" stroke="none" pointer-events="none"/>
-      <rect ${sq(hN - 5.5)} fill="none" stroke="${bead.fo > 0.5 ? "#ffffff" : bead.stroke}" stroke-opacity="0.26"
+      ${lod.sheen ? `<${TAG} ${sq(hN)} fill="url(#gsheen)" stroke="none" pointer-events="none"/>
+      <${TAG} ${sq(hN - 5.5)} fill="none" stroke="${bead.fo > 0.5 ? "#ffffff" : bead.stroke}" stroke-opacity="0.26"
         stroke-width="0.8" stroke-dasharray="1.5 3.5" stroke-linecap="round"
         vector-effect="non-scaling-stroke" pointer-events="none"/>` : ""}
       <text class="ninit" y="${(hN * 0.36).toFixed(1)}" font-size="${(hN * 0.9).toFixed(1)}"
@@ -3736,6 +3750,16 @@ function renderSettings(){
     trow.querySelectorAll("[data-theme]").forEach(btn => btn.addEventListener("click", () => {
       DB.settings.theme = btn.dataset.theme;
       save(); applySkin(); renderSettings();
+    }));
+  }
+  const srow = document.getElementById("shape-row");
+  if (srow){
+    srow.innerHTML = Object.keys(NODE_SHAPES).map(k =>
+      `<button class="thm${currentShape() === k ? " on" : ""}" data-shape="${k}">
+        <span class="sw" style="background:var(--accent); border-radius:${k === "round" ? "50%" : "4px"};"></span>${esc(NODE_SHAPES[k])}</button>`).join("");
+    srow.querySelectorAll("[data-shape]").forEach(btn => btn.addEventListener("click", () => {
+      DB.settings.nodeShape = btn.dataset.shape;
+      save(); renderSettings();
     }));
   }
   ["hot", "warm", "cold"].forEach(k => {
