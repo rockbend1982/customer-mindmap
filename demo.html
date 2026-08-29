@@ -202,12 +202,14 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 #graph-wrap{
   flex:1 1 auto; position:relative; overflow:hidden; touch-action:none;
   background:
-    repeating-linear-gradient(90deg, transparent 0 15px, rgb(var(--shadow-rgb)/.035) 15px 16px),
-    repeating-linear-gradient(0deg, transparent 0 15px, rgb(var(--shadow-rgb)/.028) 15px 16px),
+    repeating-linear-gradient(90deg, transparent 0 15px, rgb(var(--shadow-rgb)/var(--weave-a,.035)) 15px 16px),
+    repeating-linear-gradient(0deg, transparent 0 15px, rgb(var(--shadow-rgb)/var(--weave-b,.028)) 15px 16px),
     radial-gradient(var(--dot) 1px, transparent 1px),
     radial-gradient(120% 80% at 50% 0%, var(--accent-wash) 0%, transparent 60%);
   background-size:16px 16px, 16px 16px, 26px 26px, 100% 100%;
 }
+/* 人一多就把織紋收掉，只留純色與暈邊 */
+#graph-wrap.lite{--weave-a:0; --weave-b:0;}
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
 .gnode circle{stroke-width:2.5;}
@@ -3264,6 +3266,16 @@ function renderGraph(){
   const degree = {};
   rels.forEach(r => { degree[r.from] = (degree[r.from] || 0) + 1; degree[r.to] = (degree[r.to] || 0) + 1; });
   const rOf = id => R * (1 + Math.min(degree[id] || 0, 6) * 0.05);
+  /* 分級呈現：縮得小就少畫字，人多就少畫層次——設計稿給的三段式降級 */
+  const lod = {
+    // 門檻照本專案的縮放尺度校準過：一進關係圖 fit 完通常落在 0.35 左右，
+    // 直接照設計稿的 0.55／0.4 會讓預設畫面就少了標籤與人名
+    labels: gview.s >= 0.3,                        // 關係說明
+    names: gview.s >= 0.2,                         // 一般人的姓名（夥伴與聚焦者永遠留）
+    sheen: drawList.length <= 40,                  // 珠子的高光層
+    straight: drawList.length > 60,                // 連線的弧度
+  };
+  wrap.classList.toggle("lite", drawList.length > 40);
   const defs = `<defs>
     <filter id="nsh" x="-40%" y="-40%" width="180%" height="180%">
       <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" style="flood-color:var(--shadow-flood)" flood-opacity="0.26"/>
@@ -3326,7 +3338,7 @@ function renderGraph(){
     const a1 = baseAng + fan, a2 = baseAng + Math.PI - fan;
     const x1 = pa.x + Math.cos(a1) * rOf(r.from), y1 = pa.y + Math.sin(a1) * rOf(r.from);
     const x2 = pb.x + Math.cos(a2) * rEnd, y2 = pb.y + Math.sin(a2) * rEnd;
-    const off = spread * (30 / Math.max(gview.s, 0.12));   // 螢幕上恆定的弧高
+    const off = (lod.straight && nPair < 2) ? 0 : spread * (30 / Math.max(gview.s, 0.12));
     const nx = -dy / d, ny = dx / d;
     const cx = (x1 + x2) / 2 + nx * off, cy = (y1 + y2) / 2 + ny * off;
     const dim = fset && !(fset.has(r.from) && fset.has(r.to));
@@ -3375,7 +3387,7 @@ function renderGraph(){
     // 用絕對像素一刀切會把單一關係的短邊也連坐，方向資訊整片消失
     const arrowMark = !t.directed ? null : (edgePx > 34 ? "arrow-" : edgePx > 16 ? "arrows-" : null);
     // 標籤改走獨立圖層、又統一挪到線的上方後，短邊也不再互相壓或蓋姓名，門檻放寬
-    const room = fit && edgePx > Math.max(24, labelPx * 0.75);
+    const room = lod.labels && fit && edgePx > Math.max(24, labelPx * 0.75);
     if (room) taken.push({x1: lx - lhw, x2: lx + lhw, y1: ly - lhh, y2: ly + lhh});
     return {
       path: (() => {
@@ -3431,10 +3443,11 @@ function renderGraph(){
       <circle r="${rN}" fill="${wc}" fill-opacity="${bead.fo}" stroke="${bead.stroke}"
         stroke-width="${bead.sw}" vector-effect="non-scaling-stroke"
         ${hit ? 'filter="url(#nglow)"' : 'filter="url(#nsh)"'}/>
-      <circle r="${rN}" fill="url(#gsheen)" stroke="none" pointer-events="none"/>
+      ${lod.sheen ? `<circle r="${rN}" fill="url(#gsheen)" stroke="none" pointer-events="none"/>` : ""}
       <text class="ninit" y="${(rN * 0.33).toFixed(1)}" font-size="${(rN * 0.8).toFixed(1)}"
         fill="${bead.fo > 0.5 ? readableOn(wc) : "var(--ink)"}" opacity="${bead.fo > 0.5 ? 1 : 0.72}">${esc(initial)}</text>
-      <text class="nlabel" y="${(rN + ns * 0.95).toFixed(1)}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
+      ${(lod.names || partner || hit || isMe)
+        ? `<text class="nlabel" y="${(rN + ns * 0.95).toFixed(1)}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>` : ""}
       ${sub}
     </g>`;
   }).join("");
