@@ -3312,11 +3312,12 @@ function contentBounds(list, sc){
   list.forEach(c => {
     const pt = nodePos(c); if (!pt) return;
     let halfW = Math.max(R, c.name.length * ns * 0.55);
-    if (gMode === "org"){
-      // 組織圖的小字（直屬／線上／業績）比姓名長，不算進去最外側節點會被切掉
-      halfW = Math.max(halfW, orgSubLabel(c).length * ns * 0.8 * 0.55);
+    const hasSub = gMode === "org" || c.subLabel;
+    if (hasSub){
+      // 節點下方的小字（直屬／線上／業績、自己開發／轉介）比姓名長，不算進去會被切掉
+      halfW = Math.max(halfW, String(orgSubLabel(c)).length * ns * 0.8 * 0.55);
     }
-    add(pt.x - halfW, pt.y - R, pt.x + halfW, pt.y + R + ns * (gMode === "org" ? 2.9 : 1.3));
+    add(pt.x - halfW, pt.y - R, pt.x + halfW, pt.y + R + ns * (hasSub ? 2.9 : 1.3));
   });
   const hs = Math.min(80, 13 / Math.max(sc, 0.12));
   const gbs = groupBlocks(list);
@@ -3348,14 +3349,18 @@ function renderGraph(){
   let me = null;
   if (TREE_REL[gMode]){
     rels = rels.filter(r => r.type === TREE_REL[gMode]);
-    if (gMode === "org" && vis.length){
-      // 以使用者為重心：虛擬「我」節點當整棵組織樹的根，沒有上線的夥伴掛在我底下
+    if (vis.length){
+      // 以使用者為重心：虛擬「我」節點當樹根。組織圖是沒有上線的夥伴掛在我底下；
+      // 轉介鏈是沒有介紹人的人掛在我底下，一眼看得出哪些人是自己開發的
       const hasUp = new Set(rels.map(r => r.to));
       const roots = vis.filter(c => !hasUp.has(c.id));
-      const total = vis.reduce((t, c) => t + spentOf(c.id), 0);
-      me = {id:"__me__", name:"我", subLabel:
-        `直屬 ${roots.length}・線上 ${vis.length}` + (total ? "・" + money(total).replace("NT$ ", "$") : "")};
-      rels = rels.concat(roots.map((c, i) => ({id:"__mer" + i, from:"__me__", to:c.id, type:"upline", createdAt:0})));
+      const isOrg = gMode === "org";
+      const total = isOrg ? vis.reduce((t, c) => t + spentOf(c.id), 0) : 0;
+      me = {id:"__me__", name:"我", subLabel: isOrg
+        ? `直屬 ${roots.length}・線上 ${vis.length}` + (total ? "・" + money(total).replace("NT$ ", "$") : "")
+        : `自己開發 ${roots.length}・轉介來的 ${vis.length - roots.length}`};
+      rels = rels.concat(roots.map((c, i) => ({id:"__mer" + i, from:"__me__", to:c.id,
+        type:TREE_REL[gMode], createdAt:0})));
       gIntroPos = layoutIntroTree([me].concat(vis), rels);
     } else {
       gIntroPos = layoutIntroTree(vis, rels);
@@ -3415,7 +3420,7 @@ function renderGraph(){
     const half = Math.max(hOf(c.id) * 1.42,
       String(c.name || "").length * ns0 * 0.55 + ns0 * 0.25);
     return {x1: p.x - half, x2: p.x + half,
-            y1: p.y - R, y2: p.y + R + 9.5 + ns0 * (gMode === "org" ? 2.7 : 1.2)};
+            y1: p.y - R, y2: p.y + R + 9.5 + ns0 * ((gMode === "org" || c.subLabel) ? 2.7 : 1.2)};
   });
   // 群名標題貼在群框上緣，也是關係標籤不能壓的字
   groupLabelBoxes(groupBlocks(vis), Math.min(80, 13 / Math.max(gview.s, 0.12)))
@@ -3497,7 +3502,9 @@ function renderGraph(){
     // 用絕對像素一刀切會把單一關係的短邊也連坐，方向資訊整片消失
     const arrowMark = !t.directed ? null : (edgePx > 34 ? "arrow-" : edgePx > 16 ? "arrows-" : null);
     // 標籤改走獨立圖層、又統一挪到線的上方後，短邊也不再互相壓或蓋姓名，門檻放寬
-    const room = lod.labels && fit && edgePx > Math.max(24, labelPx * 0.75);
+    // 從「我」拉出去的是虛擬連線，五條都標「介紹人」既吵又沒有資訊
+    const virtualFromMe = String(r.id).indexOf("__mer") === 0;
+    const room = lod.labels && fit && !virtualFromMe && edgePx > Math.max(24, labelPx * 0.75);
     if (room) taken.push({x1: lx - lhw, x2: lx + lhw, y1: ly - lhh, y2: ly + lhh});
     return {
       path: (() => {
@@ -3545,7 +3552,7 @@ function renderGraph(){
       : `x="${(-h).toFixed(1)}" y="${(-h).toFixed(1)}" width="${(h * 2).toFixed(1)}"`
         + ` height="${(h * 2).toFixed(1)}" rx="${(h * 0.26).toFixed(1)}" transform="rotate(${tilt})"`;
     const partner = !isMe && isPartner(c);
-    const subTxt = gMode === "org" ? orgSubLabel(c) : "";
+    const subTxt = gMode === "org" ? orgSubLabel(c) : (c.subLabel || "");
     const sub = subTxt
       ? `<text class="slabel" y="${(hN + 9.5 + ns * 2.35).toFixed(1)}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
@@ -3563,7 +3570,7 @@ function renderGraph(){
         vector-effect="non-scaling-stroke" pointer-events="none"/>` : ""}
       <text class="ninit" y="${(hN * 0.36).toFixed(1)}" font-size="${(hN * 0.9).toFixed(1)}"
         fill="${bead.fo > 0.5 ? readableOn(wc) : "var(--ink)"}" opacity="${bead.fo > 0.5 ? 1 : 0.72}">${esc(initial)}</text>
-      ${(lod.names || partner || hit || isMe)
+      ${(!isMe && (lod.names || partner || hit))
         ? `<text class="nlabel" y="${(hN + 9.5 + ns * 0.9).toFixed(1)}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>` : ""}
       ${sub}
     </g>`;
