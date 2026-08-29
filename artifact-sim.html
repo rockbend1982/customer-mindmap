@@ -233,7 +233,8 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
   paint-order:stroke; stroke:var(--paper); stroke-width:3.5px; stroke-linejoin:round;
   vector-effect:non-scaling-stroke;
 }
-.gnode.hit circle{stroke:var(--ink); stroke-width:4;}
+.ninit{text-anchor:middle; font-weight:600; pointer-events:none;}
+.gnode.hit circle{stroke-width:2.5;}
 
 /* ===== 首頁：今天 ===== */
 .datehead{padding:2px 2px 12px;}
@@ -816,6 +817,13 @@ function warmthColor(k){
 }
 function partnerColor(){
   return (DB && DB.settings && DB.settings.partnerColor) || themeVar("partner");
+}
+/* 給定底色，回傳在它上面看得清楚的文字色 */
+function readableOn(hex){
+  const n = parseInt(String(hex).replace("#", ""), 16);
+  if (isNaN(n)) return "#ffffff";
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 165 ? "#3a3436" : "#ffffff";
 }
 function applySkin(){
   const vars = THEMES[currentTheme()].vars;
@@ -1644,7 +1652,7 @@ function personRowHTML(c){
   const dm = dormantInfo(c.id);
   const last = dm.days == null ? "從未往來" : dm.days === 0 ? "今天聊過" : dm.days + " 天前";
   return `<div class="person${dm.dormant ? " sleep" : ""}" data-open="${esc(c.id)}">
-    <div class="dot dot-${c.warmth}">${esc(c.name.slice(0,2))}</div>
+    <div class="dot dot-${c.warmth}" style="color:${readableOn(warmthColor(WARMTH[c.warmth] ? c.warmth : "warm"))};">${esc(c.name.slice(0,2))}</div>
     <div class="info">
       <div class="name-row">
         <span class="name">${esc(c.name)}</span>
@@ -3104,7 +3112,12 @@ function groupHullsSVG(vis){
         rx="${Math.round(HULL_PAD * 0.55)}" fill="var(--accent-soft)" fill-opacity="0.42"
         stroke="var(--accent)" stroke-opacity="0.28" stroke-width="1.4" stroke-dasharray="7 6"
         vector-effect="non-scaling-stroke"/>
-      <text class="glabel" x="${b.x1 + 12}" y="${b.y1 - hs * 0.35}" font-size="${hs.toFixed(1)}">${esc(b.label)}</text>
+      <rect x="${b.x1 + 4}" y="${(b.y1 - hs * 1.62).toFixed(1)}"
+        width="${(String(b.label).length * hs * 0.78 + hs * 0.9).toFixed(1)}" height="${(hs * 1.5).toFixed(1)}"
+        rx="${(hs * 0.75).toFixed(1)}" fill="var(--card)" stroke="var(--accent)" stroke-opacity="0.22"
+        vector-effect="non-scaling-stroke"/>
+      <text class="glabel" x="${b.x1 + 4 + hs * 0.45}" y="${(b.y1 - hs * 0.5).toFixed(1)}"
+        font-size="${hs.toFixed(1)}" stroke="none">${esc(b.label)}</text>
     </g>`;
   }).join("");
 }
@@ -3316,7 +3329,8 @@ function renderGraph(){
   const nodes = drawList.map(c => {
     const isMe = c.id === "__me__";
     const pt = nodePos(c);
-    const wc = isMe ? "#252525" : warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
+    const wc = isMe ? "#3a3436" : warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
+    const initial = isMe ? "我" : String(c.name || "").slice(0, 1);
     const dim = fset && !fset.has(c.id);
     const sleep = !isMe && !dim && dormantInfo(c.id).dormant;
     const hit = !isMe && gFocus === c.id;
@@ -3328,9 +3342,13 @@ function renderGraph(){
       ? `<text class="slabel" y="${R + ns * 2.35}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" ${isMe ? "" : `data-nid="${esc(c.id)}"`} transform="translate(${pt.x},${pt.y})">
+      ${hit ? `<circle r="${R + 10}" fill="none" stroke="var(--accent)" stroke-opacity="0.32"
+        stroke-width="2.5" vector-effect="non-scaling-stroke"/>` : ""}
       ${partner ? `<circle r="${R + 5}" fill="none" stroke="${partnerColor()}" stroke-width="2.5" opacity="0.9"/>` : ""}
       <circle r="${R}" fill="${wc}" stroke="#ffffff" filter="url(#nsh)"/>
       <circle r="${R}" fill="url(#gsheen)" pointer-events="none"/>
+      <text class="ninit" y="${(R * 0.33).toFixed(1)}" font-size="${(R * 0.84).toFixed(1)}"
+        fill="${readableOn(wc)}">${esc(initial)}</text>
       <text class="nlabel" y="${R + ns * 0.95}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
       ${sub}
     </g>`;
