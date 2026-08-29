@@ -35,7 +35,7 @@
 html,body{margin:0; padding:0; height:100%;}
 body{
   background:var(--paper); color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei UI",system-ui,sans-serif;
+  font-family:var(--font-body, -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei UI", system-ui, sans-serif);
   letter-spacing:.02em;
   font-size:16px; line-height:1.55;
   overscroll-behavior:none;
@@ -237,6 +237,25 @@ input[type="color"].colorpick{width:46px; height:34px; padding:2px; border-radiu
   vector-effect:non-scaling-stroke;
 }
 .ninit{text-anchor:middle; font-weight:600; pointer-events:none;}
+
+/* ===== 手繪感主題 ===== */
+body.theme-sketch .card,
+body.theme-sketch .person,
+body.theme-sketch .empty{border-radius:16px 13px 17px 12px / 13px 17px 12px 16px; border-width:1.5px;}
+body.theme-sketch .btn{border-radius:14px 20px 15px 19px / 19px 14px 20px 15px; border-width:1.5px;}
+body.theme-sketch .btn.primary{border-radius:14px 20px 15px 19px / 19px 14px 20px 15px;}
+body.theme-sketch .chip,
+body.theme-sketch .filterbar .fbtn,
+body.theme-sketch .minitabs button,
+body.theme-sketch .thm{border-radius:13px 18px 12px 17px / 17px 12px 18px 13px;}
+body.theme-sketch .kpi > div{border-radius:15px 11px 16px 12px / 12px 16px 11px 15px;}
+body.theme-sketch input,
+body.theme-sketch textarea,
+body.theme-sketch select{border-radius:11px 15px 12px 14px / 14px 12px 15px 11px; border-width:1.5px;}
+body.theme-sketch h1,
+body.theme-sketch .datehead .t,
+body.theme-sketch .card-lead .t{letter-spacing:.06em;}
+body.theme-sketch .todo-check{border-radius:50% 48% 52% 50% / 50% 52% 48% 50%; border-width:1.5px;}
 .gnode.hit circle{stroke-width:2.5;}
 
 /* ===== 首頁：今天 ===== */
@@ -775,6 +794,20 @@ const THEMES = {
     "chart-lo":"#d5bd93", "chart-lo2":"#ece0c9",
     "shadow-rgb":"55 45 30", "shadow-flood":"rgb(55,45,30)", dot:"#efe8db",
   }},
+  sketch: {label:"手繪感", vars:{
+    paper:"#fdfaf2", card:"#fffdf7", ink:"#3f3a33", "ink-soft":"#7d7468",
+    line:"#ece3d2", "line-strong":"#d9cdb8", "card-line":"#e5dbc7",
+    accent:"#5a6b7d", "accent-soft":"#e8edf2", "accent-wash":"#f7f9fb",
+    "accent-hover":"#47576a", "accent-active":"#3a4756", "accent-lite":"#8b9bab",
+    "btn-line":"#d9cdb8", "btn-primary":"#5a6b7d", partner:"#8a6d52",
+    hot:"#b5563e", warm:"#6a5f52", cold:"#c3bbaa",
+    "hot-bg":"#f7e7de", "warm-bg":"#efeade", "cold-bg":"#f2eee4",
+    danger:"#a33b2c", "danger-bg":"#f7e5e0",
+    "surface-sunken":"#f8f4e9", "surface-hover":"#f2ece0",
+    "chart-lo":"#a9b6c2", "chart-lo2":"#d6dee5",
+    "shadow-rgb":"70 60 45", "shadow-flood":"rgb(70,60,45)", dot:"#ece2ce",
+    "font-body":'"Kaiti TC","STKaiti","BiauKai","DFKai-SB",-apple-system,"PingFang TC",serif',
+  }},
   nuskin: {label:"品牌青", vars:{
     paper:"#ffffff", card:"#ffffff", ink:"#272525", "ink-soft":"#63666a",
     line:"#eef1f3", "line-strong":"#d8d8d8", "card-line":"#e5e5e5",
@@ -831,8 +864,11 @@ function readableOn(hex){
   return (0.299 * r + 0.587 * g + 0.114 * b) > 165 ? "#3a3436" : "#ffffff";
 }
 function applySkin(){
-  const vars = THEMES[currentTheme()].vars;
+  const theme = currentTheme();
+  const vars = THEMES[theme].vars;
+  document.body.style.removeProperty("--font-body");
   Object.keys(vars).forEach(k => document.body.style.setProperty("--" + k, vars[k]));
+  document.body.classList.toggle("theme-sketch", theme === "sketch");
   ["hot", "warm", "cold"].forEach(k => {
     const custom = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
     if (custom) document.body.style.setProperty("--" + k, custom);
@@ -3116,7 +3152,7 @@ function groupHullsSVG(vis){
       <rect x="${b.x1}" y="${b.y1}" width="${b.x2 - b.x1}" height="${b.y2 - b.y1}"
         rx="${Math.round(HULL_PAD * 0.55)}" fill="var(--accent-soft)" fill-opacity="0.42"
         stroke="var(--accent)" stroke-opacity="0.28" stroke-width="1.4" stroke-dasharray="7 6"
-        vector-effect="non-scaling-stroke"/>
+        vector-effect="non-scaling-stroke"${currentTheme() === "sketch" ? ' filter="url(#rough)"' : ""}/>
       <rect x="${b.x1 + 4}" y="${(b.y1 - hs * 1.62).toFixed(1)}"
         width="${(String(b.label).length * hs * 0.78 + hs * 0.9).toFixed(1)}" height="${(hs * 1.5).toFixed(1)}"
         rx="${(hs * 0.75).toFixed(1)}" fill="var(--card)" stroke="var(--accent)" stroke-opacity="0.22"
@@ -3210,6 +3246,21 @@ function renderGraph(){
     <filter id="nsh" x="-40%" y="-40%" width="180%" height="180%">
       <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" style="flood-color:var(--shadow-flood)" flood-opacity="0.26"/>
     </filter>
+    <!-- 低頻大位移＝手繪那種緩慢的歪，高頻小位移只會看起來像雜訊 -->
+    <filter id="rough" x="-30%" y="-30%" width="160%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="rough2" x="-30%" y="-30%" width="160%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.017" numOctaves="2" seed="23" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="4.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- 圓只有 54 單位寬，頻率太低會整顆一起平移而不是變形，要讓圓周上有兩三個起伏 -->
+    <filter id="nsh-rough" x="-45%" y="-45%" width="190%" height="190%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.055" numOctaves="2" seed="11" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.4" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feDropShadow in="d" dx="0" dy="1.2" stdDeviation="1.4" style="flood-color:var(--shadow-flood)" flood-opacity="0.22"/>
+    </filter>
     <radialGradient id="gsheen" cx="34%" cy="28%" r="74%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0.40"/>
       <stop offset="62%" stop-color="#ffffff" stop-opacity="0.06"/>
@@ -3240,6 +3291,10 @@ function renderGraph(){
   });
   const hitsTaken = (x, y, hw, hh) => taken.some(b =>
     x + hw > b.x1 && x - hw < b.x2 && y + hh > b.y1 && y - hh < b.y2);
+
+  // 手繪感主題：線條與圓形走抖動濾鏡，看起來像隨手畫的
+  const sketchy = currentTheme() === "sketch";
+  const roughAttr = sketchy ? ` filter="url(#rough)"` : "";
 
   const pkey = r => r.from < r.to ? r.from + "|" + r.to : r.to + "|" + r.from;
   const pairGroups = {};
@@ -3317,11 +3372,15 @@ function renderGraph(){
     const room = fit && edgePx > Math.max(24, labelPx * 0.75);
     if (room) taken.push({x1: lx - lhw, x2: lx + lhw, y1: ly - lhh, y2: ly + lhh});
     return {
-      path: `<path class="gedge" d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
+      path: `<path class="gedge"${roughAttr} d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
         stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
         ${arrowMark ? `marker-end="url(#${arrowMark}${esc(t.key)})"` : ""}
         ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
-        stroke-linecap="round" opacity="${dim ? 0.11 : 0.9}"/>`,
+        stroke-linecap="round" opacity="${dim ? 0.11 : 0.9}"/>`
+        + (sketchy && !dim ? `<path class="gedge" filter="url(#rough2)" d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}"
+        fill="none" stroke="${t.color}" stroke-width="1.6" vector-effect="non-scaling-stroke"
+        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
+        stroke-linecap="round" opacity="0.45"/>` : ""),
       label: room
         ? `<text class="elabel" x="${lx}" y="${ly + ls * 0.35}" font-size="${ls.toFixed(1)}" fill="${t.color}" opacity="${dim ? 0.12 : 1}">${esc(t.label)}</text>`
         : ""
@@ -3350,7 +3409,7 @@ function renderGraph(){
       ${hit ? `<circle r="${R + 10}" fill="none" stroke="var(--accent)" stroke-opacity="0.32"
         stroke-width="2.5" vector-effect="non-scaling-stroke"/>` : ""}
       ${partner ? `<circle r="${R + 5}" fill="none" stroke="${partnerColor()}" stroke-width="2.5" opacity="0.9"/>` : ""}
-      <circle r="${R}" fill="${wc}" stroke="#ffffff" filter="url(#nsh)"/>
+      <circle r="${R}" fill="${wc}" stroke="#ffffff" filter="url(#${sketchy ? "nsh-rough" : "nsh"})"/>
       <circle r="${R}" fill="url(#gsheen)" pointer-events="none"/>
       <text class="ninit" y="${(R * 0.33).toFixed(1)}" font-size="${(R * 0.84).toFixed(1)}"
         fill="${readableOn(wc)}">${esc(initial)}</text>
