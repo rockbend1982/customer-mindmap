@@ -3939,8 +3939,80 @@ function seedGroupDemo(){
   [["E1","周文彬"],["E2","何雅琪"]].forEach(m => cs.push({id:m[0], name:m[1], phone:"", company:"還沒分群",
     source:"", lineId:"", birthday:"", tags:[], warmth:"cold", role:"customer", preference:"", note:"",
     pos:null, createdAt:Date.now(), updatedAt:Date.now()}));
+  const DAY = 86400000;
+  const ago = n => { const t = new Date(); t.setDate(t.getDate() - n); return t.toISOString().slice(0,10); };
+  const mAgo = (m, d) => { const t = new Date(); t.setMonth(t.getMonth() - m); t.setDate(d); return t.toISOString().slice(0,10); };
+  // 認識的先後不同，才不會全部都算這個月的新客戶
+  const SINCE = {A1:400,A2:380,A3:260,A4:330,A5:120,B1:410,B2:300,B3:190,B4:210,
+                 C1:370,C2:150,C3:280,D1:430,D2:420,E1:100,E2:60};
+  cs.forEach(c => { c.createdAt = Date.now() - (SINCE[c.id] || 90) * DAY; });
   DB.customers = cs; DB.relations = rs;
-  DB.interactions = []; DB.purchases = []; DB.tasks = [];
+
+  DB.interactions = [
+    ["A1",1,"新案場開工，聊下半年怎麼互相帶客"],
+    ["B1",2,"社團聚會，兩個學員想了解產品"],
+    ["A2",4,"陪他跑家庭聚會，成交兩單"],
+    ["D1",5,"回娘家順便坐一下"],
+    ["A3",8,"上完課聊到健身房想擴點"],
+    ["B2",11,"花坊母親節檔期後回訪"],
+    ["C1",14,"報稅季結束，約了咖啡敘舊"],
+    ["A4",17,"車子保養順便聊，太太想了解儲蓄險"],
+    ["B4",22,"line 上問候，回得還算熱絡"],
+    ["D2",26,"家族聚餐"],
+    ["C3",31,"她問到最近有沒有新品"],
+    ["A5",39,"在她家客廳做了潔膚儀體驗"],
+    ["B3",47,"line 上問候，回得很簡短"],
+    ["C2",63,"前公司尾牙碰到"],
+    ["E1",97,"網路詢問後唯一一次聯絡"],
+  ].map((x,i) => ({id:"gi"+i, customerId:x[0], date:ago(x[1]), text:x[2], createdAt:Date.now()+i}));
+
+  const GB = [
+    ["B1",0,26,"ageLOC® LumiSpa® iO 潔膚儀",8900,120,1,"g-01","母親節檔期"],
+    ["B1",0,26,"3A 無瑕新生精華",2350,47,2,"g-01","母親節檔期"],
+    ["D1",0,23,"優式倍® 軟膠囊",6115,110,1,"g-02",""],
+    ["A2",0,19,"[套裝含短效品] 人氣鎂光250分套裝",12075,250,1,"g-03","進貨"],
+    ["C1",0,14,"如新華茂精選魚油",1195,26,4,"g-04","事務所湊單"],
+    ["A1",0,9,"優式倍® 軟膠囊家庭套裝",27395,500,1,"g-05","全家一起吃"],
+    ["B2",1,22,"蔓越莓菁妍組合",4400,94,2,"g-06","花坊送禮組"],
+    ["A3",1,16,"ageLOC® TRME先食茶三入組",8280,175,1,"g-07","健身房學員團"],
+    ["D1",1,23,"優式倍® 軟膠囊",6115,110,1,"g-08",""],
+    ["A4",2,18,"Appeal®綜合營養飲品(麥芽香草口味)",2025,37,2,"g-09","太太的名義"],
+    ["D1",2,23,"優式倍® 軟膠囊",6115,110,1,"g-10",""],
+    ["B1",2,12,"深海賦活魚油",2440,52,3,"g-11",""],
+    ["A1",3,20,"優式倍® 軟膠囊",6115,110,2,"g-12",""],
+    ["D1",3,23,"優式倍® 軟膠囊",6115,110,1,"g-13",""],
+    ["C3",3,10,"Splash®C蘆薈活力飲品",1705,34,2,"g-14",""],
+    ["A2",4,17,"水光膠原胜肽六入組",12530,250,1,"g-15",""],
+    ["D1",4,23,"優式倍® 軟膠囊",6115,110,1,"g-16",""],
+    ["B4",5,15,"LumiSpa® 平衡淨膚露(適用中性及混和性肌膚)",910,20,2,"g-17",""],
+    ["D1",5,23,"優式倍® 軟膠囊",6115,110,1,"g-18",""],
+    ["A3",6,19,"G3 活能飲品(隨身袋)二入組",4900,100,2,"g-19","健身房備貨"],
+    ["D1",6,23,"優式倍® 軟膠囊",6115,110,1,"g-20",""],
+    ["C2",7,8,"如新華茂精選魚油",1195,26,2,"g-21","唯一一次購買"],
+    ["D2",7,21,"ageLOC®TRME FUN鬆飲",2650,55,2,"g-22",""],
+    ["B2",8,14,"Nu Colour® 濾鏡透膚BB粉底液 SPF 35 PA++ 1.1象牙白色",1135,23,3,"g-23","店裡代客訂"],
+  ];
+  DB.purchases = GB.map((x,i) => ({id:"gp"+i, customerId:x[0], date:mAgo(x[1], x[2]), item:x[3],
+    qty:x[6], unit:x[4], amount:x[4] * x[6], svUnit:x[5], sv:x[5] * x[6], orderId:x[7],
+    note:x[8], cycle:x[0] === "D1" ? 30 : null, createdAt:Date.now()+i}));
+  [["A5",39,"ageLOC® LumiSpa® iO 潔膚儀","膚觸有感，想再試一次","在她家客廳體驗"],
+   ["B3",47,"3A 無瑕新生精華","反應普通",""],
+   ["E2",25,"ageLOC® TRME先食茶","喝完覺得順口","還沒決定"],
+  ].forEach((x,i) => DB.purchases.push({id:"gpt"+i, customerId:x[0], date:ago(x[1]),
+    orderId:"g-trial"+i, kind:"trial", reaction:x[3], item:x[2], qty:1, unit:null, amount:null,
+    svUnit:null, sv:null, cycle:null, note:x[4], createdAt:Date.now()+300+i}));
+
+  DB.tasks = [
+    {id:"gt0", customerId:"A4", due:ago(7),   text:"回覆太太的儲蓄險試算", done:false, createdAt:Date.now()},
+    {id:"gt1", customerId:"A5", due:ago(2),   text:"體驗後追蹤，問她考慮得怎麼樣", done:false, createdAt:Date.now()},
+    {id:"gt2", customerId:"A1", due:todayStr(), text:"約見面談下半年合作", done:false, createdAt:Date.now()},
+    {id:"gt3", customerId:"B1", due:ago(-3),  text:"把兩位學員的資料整理給她", done:false, createdAt:Date.now()},
+    {id:"gt4", customerId:"E1", due:ago(-15), text:"久沒聯絡了，找個理由問候", done:false, createdAt:Date.now()},
+    {id:"gt5", customerId:"D1", due:ago(-24), text:"下個月的月配確認品項", done:false, createdAt:Date.now()},
+    {id:"gt6", customerId:"B2", due:ago(12),  text:"母親節檔期報價", done:true, doneAt:Date.now() - 11 * DAY, createdAt:Date.now() - 20 * DAY},
+    {id:"gt7", customerId:"A2", due:ago(30),  text:"陪他跑第一場家庭聚會", done:true, doneAt:Date.now() - 29 * DAY, createdAt:Date.now() - 40 * DAY},
+    {id:"gt8", customerId:"C1", due:ago(58),  text:"報稅季後約敘舊", done:true, doneAt:Date.now() - 57 * DAY, createdAt:Date.now() - 70 * DAY},
+  ];
   save();
 }
 DB = loadDB();
