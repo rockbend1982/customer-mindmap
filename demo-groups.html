@@ -1086,6 +1086,8 @@ function migrate(d){
 
   if (THEMES[st.theme]) base.settings.theme = st.theme;
   if (NODE_SHAPES[st.nodeShape]) base.settings.nodeShape = st.nodeShape;
+  // settings 是白名單制，沒列進來的欄位每次載入都會被丟掉
+  if (typeof st.seedVer === "number") base.settings.seedVer = st.seedVer;
   base.lastBackupAt = isStr(d.lastBackupAt) ? d.lastBackupAt : null;
   base._dropped = Object.values(dropped).some(n => n > 0) ? dropped : null;
   return base;
@@ -3913,8 +3915,11 @@ document.getElementById("import-file").addEventListener("change", e => {
 });
 
 /* ---------- 啟動 ---------- */
+/* 假資料改版就把這個數字加一：舊裝置的 localStorage 裡還留著上一版，
+   只看「有沒有資料」會永遠擋住新的情境 */
+const SEED_VER = 2;
 function seedGroupDemo(){
-  if (DB.customers.length) return;
+  if (DB.customers.length && (DB.settings || {}).seedVer === SEED_VER) return;
   // 四個彼此不相連的群 + 兩位還沒連上任何人
   const G = [
     ["直銷組織", [["A1","陳志明","both","hot"],["A2","劉冠廷","both","hot"],["A3","吳俊傑","both","warm"],
@@ -4013,6 +4018,7 @@ function seedGroupDemo(){
     {id:"gt7", customerId:"A2", due:ago(30),  text:"陪他跑第一場家庭聚會", done:true, doneAt:Date.now() - 29 * DAY, createdAt:Date.now() - 40 * DAY},
     {id:"gt8", customerId:"C1", due:ago(58),  text:"報稅季後約敘舊", done:true, doneAt:Date.now() - 57 * DAY, createdAt:Date.now() - 70 * DAY},
   ];
+  DB.settings = Object.assign({}, DB.settings, {seedVer: SEED_VER});
   save();
 }
 DB = loadDB();

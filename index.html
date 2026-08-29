@@ -1093,6 +1093,8 @@ function migrate(d){
 
   if (THEMES[st.theme]) base.settings.theme = st.theme;
   if (NODE_SHAPES[st.nodeShape]) base.settings.nodeShape = st.nodeShape;
+  // settings 是白名單制，沒列進來的欄位每次載入都會被丟掉
+  if (typeof st.seedVer === "number") base.settings.seedVer = st.seedVer;
   base.lastBackupAt = isStr(d.lastBackupAt) ? d.lastBackupAt : null;
   base._dropped = Object.values(dropped).some(n => n > 0) ? dropped : null;
   return base;

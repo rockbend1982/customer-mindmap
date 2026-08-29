@@ -594,7 +594,7 @@ details.detfold > div{padding:0 0 14px;}
    織網 — 個人客戶關係心智圖（單檔、本機儲存、不上傳）
    ========================================================= */
 
-const KEY = "renmai_nuskin_demo_v12";
+const KEY = "renmai_artifactsim_v1";
 const WARMTH = {
   hot:  {label:"鐵桿"},
   warm: {label:"溫"},
@@ -1081,6 +1081,8 @@ function migrate(d){
 
   if (THEMES[st.theme]) base.settings.theme = st.theme;
   if (NODE_SHAPES[st.nodeShape]) base.settings.nodeShape = st.nodeShape;
+  // settings 是白名單制，沒列進來的欄位每次載入都會被丟掉
+  if (typeof st.seedVer === "number") base.settings.seedVer = st.seedVer;
   base.lastBackupAt = isStr(d.lastBackupAt) ? d.lastBackupAt : null;
   base._dropped = Object.values(dropped).some(n => n > 0) ? dropped : null;
   return base;
@@ -3908,8 +3910,11 @@ document.getElementById("import-file").addEventListener("change", e => {
 });
 
 /* ---------- 啟動 ---------- */
+/* 假資料改版就把這個數字加一：舊裝置的 localStorage 裡還留著上一版，
+   只看「有沒有資料」會永遠擋住新的情境 */
+const SEED_VER = 2;
 function seedDemo(){
-  if (DB.customers.length) return;
+  if (DB.customers.length && (DB.settings || {}).seedVer === SEED_VER) return;
   // 日期一律相對今天算，demo 放久了也不會變成「大家都三個月沒聯絡」
   const ago = n => { const t = new Date(); t.setDate(t.getDate() - n); return t.toISOString().slice(0,10); };
   const mAgo = (m, d) => { const t = new Date(); t.setMonth(t.getMonth() - m); t.setDate(d); return t.toISOString().slice(0,10); };
@@ -4054,6 +4059,7 @@ function seedDemo(){
     {id:"t10", customerId:"c13", due:ago(55), text:"月配改成雙月配", done:true, doneAt:Date.now() - 54 * DAY, createdAt:Date.now() - 60 * DAY},
     {id:"t11", customerId:"c04", due:ago(80), text:"母親節檔期報價", done:true, doneAt:Date.now() - 79 * DAY, createdAt:Date.now() - 90 * DAY},
   ];
+  DB.settings = Object.assign({}, DB.settings, {seedVer: SEED_VER});
   save();
 }
 DB = loadDB();
