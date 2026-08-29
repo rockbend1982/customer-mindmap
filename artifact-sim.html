@@ -1200,6 +1200,49 @@ function openMonthDetail(key){
   const sum = rows.reduce((t, x) => t + (Number(x.amount) || 0), 0);
   openSheet(`${Number(key.slice(5))} 月・零售 ${shortMoney(sum)}`, ordersListHTML(rows));
 }
+/* 行動量四格的明細：做了什麼，不是賣了多少 */
+function openActDetail(kind){
+  const from = salesFrom();
+  const fromTs = gSalesRange === "all" ? 0 : new Date(from + "T00:00:00").getTime();
+  const label = (SALES_RANGES.find(r => r[0] === gSalesRange) || ["", ""])[1];
+  const row = (name, sub, right, id) =>
+    `<div class="rankrow"${id ? ` data-open="${esc(id)}" style="cursor:pointer;"` : ""}>
+      <div class="rname">${esc(name)}${sub ? `<div class="rsub">${sub}</div>` : ""}</div>
+      <div class="rval" style="font-weight:500; color:var(--ink-soft); font-size:12.5px;">${esc(right)}</div>
+    </div>`;
+  const nameOf = id => { const c = getCustomer(id); return c ? c.name : "（已刪除的客戶）"; };
+  let title = "", body = "";
+  if (kind === "logs"){
+    const rows = DB.interactions.filter(x => x.date >= from)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    title = `${label}聯絡 ${rows.length} 次`;
+    body = rows.map(x => row(nameOf(x.customerId), esc(String(x.text || "").slice(0, 50)), x.date, x.customerId)).join("");
+  } else if (kind === "trials"){
+    const by = {};
+    DB.purchases.filter(x => isTrial(x) && x.date >= from).forEach(x => {
+      const k = x.customerId + "|" + (x.orderId || x.id);
+      (by[k] = by[k] || []).push(x);
+    });
+    const list = Object.values(by).sort((a, b) => b[0].date.localeCompare(a[0].date));
+    title = `${label}給出 ${list.length} 份體驗`;
+    body = list.map(items => row(nameOf(items[0].customerId),
+      esc(items.map(x => x.item).join("、")) + (items[0].reaction ? "　反應：" + esc(items[0].reaction) : ""),
+      items[0].date, items[0].customerId)).join("");
+  } else if (kind === "new"){
+    const rows = DB.customers.filter(x => (x.createdAt || 0) >= fromTs)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    title = `${label}新增 ${rows.length} 位客戶`;
+    body = rows.map(c => row(c.name, esc([c.company, c.source].filter(Boolean).join("・")),
+      new Date(c.createdAt || 0).toLocaleDateString("zh-TW"), c.id)).join("");
+  } else {
+    const rows = DB.tasks.filter(t => t.done && (t.doneAt || 0) >= fromTs)
+      .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+    title = `${label}完成 ${rows.length} 件待辦`;
+    body = rows.map(t => row(nameOf(t.customerId), esc(t.text),
+      new Date(t.doneAt || 0).toLocaleDateString("zh-TW"), t.customerId)).join("");
+  }
+  openSheet(title, body || `<div class="muted">這段期間沒有紀錄。</div>`);
+}
 function openKpiDetail(kind){
   const rows = salesRows().filter(x => !fromPartner(x.customerId));
   const label = (SALES_RANGES.find(r => r[0] === gSalesRange) || ["", ""])[1];
@@ -1321,11 +1364,12 @@ function renderSales(){
   const act = `<div class="card">
     <div class="cardtitle">這段期間的行動 <span class="muted">你控制得了的部分</span></div>
     <div class="kpi">
-      <div><b>${logs.length}</b><span>次聯絡・${new Set(logs.map(x => x.customerId)).size} 人</span></div>
-      <div><b>${orderCount(trialRows)}</b><span>份體驗・${new Set(trialRows.map(x => x.customerId)).size} 人</span></div>
-      <div><b>${newCust.length}</b><span>位新客戶</span></div>
-      <div><b>${doneTasks.length}</b><span>件待辦完成</span></div>
+      <div class="tap" data-act="logs"><b>${logs.length}</b><span>次聯絡・${new Set(logs.map(x => x.customerId)).size} 人</span></div>
+      <div class="tap" data-act="trials"><b>${orderCount(trialRows)}</b><span>份體驗・${new Set(trialRows.map(x => x.customerId)).size} 人</span></div>
+      <div class="tap" data-act="new"><b>${newCust.length}</b><span>位新客戶</span></div>
+      <div class="tap" data-act="tasks"><b>${doneTasks.length}</b><span>件待辦完成</span></div>
     </div>
+    <div class="muted" style="margin-top:9px;">點方塊看做了哪些</div>
   </div>`;
 
   const allRetail = all.filter(x => !fromPartner(x.customerId));
@@ -1497,6 +1541,8 @@ document.body.addEventListener("click", e => {
   if (mo){ openMonthDetail(mo.dataset.month); return; }
   const kp = e.target.closest("[data-kpi]");
   if (kp){ openKpiDetail(kp.dataset.kpi); return; }
+  const ac = e.target.closest("[data-act]");
+  if (ac){ openActDetail(ac.dataset.act); return; }
   const it = e.target.closest("[data-sitem]");
   if (it) openSalesItem(it.dataset.sitem);
 });
