@@ -195,8 +195,16 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
 #graph-legend .lg{flex:0 0 auto; display:flex; align-items:center; gap:5px; white-space:nowrap;}
 #graph-legend .sw{width:26px; height:6px; flex:0 0 auto;}
 #graph-legend .swdot{width:11px; height:11px; border-radius:50%;}
-#graph-wrap{flex:1 1 auto; position:relative; overflow:hidden; touch-action:none; background:
-  radial-gradient(var(--dot) 1px, transparent 1px); background-size:26px 26px;}
+/* 畫布當成布：16px 的經緯織紋＋角落暖暈，再疊原本的點陣 */
+#graph-wrap{
+  flex:1 1 auto; position:relative; overflow:hidden; touch-action:none;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 15px, rgb(var(--shadow-rgb)/.035) 15px 16px),
+    repeating-linear-gradient(0deg, transparent 0 15px, rgb(var(--shadow-rgb)/.028) 15px 16px),
+    radial-gradient(var(--dot) 1px, transparent 1px),
+    radial-gradient(120% 80% at 50% 0%, var(--accent-wash) 0%, transparent 60%);
+  background-size:16px 16px, 16px 16px, 26px 26px, 100% 100%;
+}
 #graph-svg{position:absolute; inset:0; width:100%; height:100%; touch-action:none;}
 .gnode{cursor:pointer;}
 .gnode circle{stroke-width:2.5;}
@@ -890,13 +898,21 @@ function inlineRename(el, current, onDone){
 /* 關係線：色相刻意拉開，再各配不同虛線樣式，讓線在小螢幕上不只能靠顏色分辨 */
 /* 低彩度色盤：六種關係彼此分得出來，又不會在柔和配色裡刺眼 */
 const DEFAULT_RELTYPES = [
-  {key:"upline",    label:"上線",   directed:true,  color:"#6d7c8a", dash:"",      builtin:true, tree:true},
-  {key:"intro",     label:"介紹人", directed:true,  color:"#b8503f", dash:"",      builtin:true},
-  {key:"family",    label:"家人",   directed:false, color:"#8c6d8f", dash:"9 5",   builtin:true},
-  {key:"friend",    label:"朋友",   directed:false, color:"#7d8a6a", dash:"",      builtin:true},
-  {key:"colleague", label:"同事",   directed:false, color:"#a8834c", dash:"2 5",   builtin:true},
-  {key:"club",      label:"其他",   directed:false, color:"#8a7f7d", dash:"12 4 3 4", builtin:true},
+  {key:"upline",    label:"上線",   directed:true,  color:"#6d7c8a", dash:"",          builtin:true, tree:true},
+  {key:"intro",     label:"介紹人", directed:true,  color:"#b8503f", dash:"7 5",       builtin:true},
+  {key:"family",    label:"家人",   directed:false, color:"#8c6d8f", dash:"",          builtin:true},
+  {key:"friend",    label:"朋友",   directed:false, color:"#7d8a6a", dash:"",          builtin:true},
+  {key:"colleague", label:"同事",   directed:false, color:"#a8834c", dash:"0.1 5",     builtin:true},
+  {key:"club",      label:"其他",   directed:false, color:"#8a7f7d", dash:"10 5 2 5",  builtin:true},
 ];
+/* 針法：粗細也參與編碼，家人畫成雙股（同一條曲線往法向 ±2.2 各描一筆） */
+const RELTYPE_STITCH = {
+  upline:{w:2}, intro:{w:2}, family:{w:1.2, twin:2.2}, friend:{w:1.5}, colleague:{w:2.1}, club:{w:1.3},
+};
+/* 歷代預設線型：沒自訂過就跟著改版更新 */
+const LEGACY_RELTYPE_DASH = {
+  intro:[""], family:["9 5"], colleague:["2 5"], club:["12 4 3 4"],
+};
 /* 歷代預設色：使用者沒自訂過的話，載入時自動升級成上面的新色 */
 const LEGACY_RELTYPE_COLORS = {
   upline:["#1f6f8b", "#0f766e"], intro:["#c81d1d"], family:["#7a6172", "#7c3aed"],
@@ -1036,6 +1052,8 @@ function migrate(d){
         .map(t => {
           const def = DEFAULT_RELTYPES.find(x => x.key === t.key);
           // 還停在舊版低飽和色（沒自訂過）就升級成新配色，並補上虛線樣式
+          const ld = LEGACY_RELTYPE_DASH[t.key];
+          if (def && ld && ld.includes(String(t.dash || ""))) t = Object.assign({}, t, {dash: def.dash});
           const legacy = LEGACY_RELTYPE_COLORS[t.key] || [];
           const color = isColor(t.color)
             ? ((def && legacy.some(L => t.color.toLowerCase() === L.toLowerCase())) ? def.color : t.color)
@@ -3145,9 +3163,9 @@ function groupHullsSVG(vis){
     const dim = gFocus && !b.ids.includes(gFocus);
     return `<g class="ghull ${dim ? "dim" : ""}">
       <rect x="${b.x1}" y="${b.y1}" width="${b.x2 - b.x1}" height="${b.y2 - b.y1}"
-        rx="${Math.round(HULL_PAD * 0.55)}" fill="var(--accent-soft)" fill-opacity="0.42"
-        stroke="var(--accent)" stroke-opacity="0.28" stroke-width="1.4" stroke-dasharray="7 6"
-        vector-effect="non-scaling-stroke"/>
+        rx="${Math.round(HULL_PAD * 0.9)}" fill="var(--accent)" fill-opacity="0.045"
+        stroke="var(--accent)" stroke-opacity="0.3" stroke-width="1.2" stroke-dasharray="6 5"
+        stroke-linecap="round" vector-effect="non-scaling-stroke"/>
       <rect x="${b.x1 + 4}" y="${(b.y1 - hs * 1.62).toFixed(1)}"
         width="${(String(b.label).length * hs * 0.78 + hs * 0.9).toFixed(1)}" height="${(hs * 1.5).toFixed(1)}"
         rx="${(hs * 0.75).toFixed(1)}" fill="var(--card)" stroke="var(--accent)" stroke-opacity="0.22"
@@ -3246,10 +3264,13 @@ function renderGraph(){
       <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" style="flood-color:var(--shadow-flood)" flood-opacity="0.26"/>
     </filter>
     <radialGradient id="gsheen" cx="34%" cy="28%" r="74%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.40"/>
-      <stop offset="62%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0.10"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
+    <filter id="nglow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" style="flood-color:var(--accent)" flood-opacity="0.5"/>
+    </filter>
     ${DB.relationTypes.map(t => `<marker id="arrow-${esc(t.key)}" viewBox="0 0 10 10" refX="9" refY="5"
       markerWidth="5" markerHeight="5" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="${t.color}"/></marker>
@@ -3352,11 +3373,20 @@ function renderGraph(){
     const room = fit && edgePx > Math.max(24, labelPx * 0.75);
     if (room) taken.push({x1: lx - lhw, x2: lx + lhw, y1: ly - lhh, y2: ly + lhh});
     return {
-      path: `<path class="gedge" d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
-        stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
-        ${arrowMark ? `marker-end="url(#${arrowMark}${esc(t.key)})"` : ""}
-        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
-        stroke-linecap="round" opacity="${dim ? 0.11 : 0.9}"/>`,
+      path: (() => {
+        const st = RELTYPE_STITCH[t.key] || {w: 1.8};
+        const common = `fill="none" stroke="${t.color}" stroke-width="${st.w}" vector-effect="non-scaling-stroke"`
+          + (t.dash ? ` stroke-dasharray="${esc(t.dash)}"` : "")
+          + ` stroke-linecap="round" opacity="${dim ? 0.11 : 0.92}"`;
+        // 家人＝雙股平行線：同一條曲線往法向各推 ±twin 描兩筆
+        if (st.twin){
+          const k = st.twin;
+          const off = (s) => `M${x1 + nx * k * s} ${y1 + ny * k * s} Q${cx + nx * k * s} ${cy + ny * k * s} ${x2 + nx * k * s} ${y2 + ny * k * s}`;
+          return `<path class="gedge" d="${off(1)}" ${common}/><path class="gedge" d="${off(-1)}" ${common}/>`;
+        }
+        return `<path class="gedge" d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" ${common}`
+          + (arrowMark ? ` marker-end="url(#${arrowMark}${esc(t.key)})"` : "") + `/>`;
+      })(),
       label: room
         ? `<text class="elabel" x="${lx}" y="${ly + ls * 0.35}" font-size="${ls.toFixed(1)}" fill="${t.color}" opacity="${dim ? 0.12 : 1}">${esc(t.label)}</text>`
         : ""
@@ -3372,6 +3402,12 @@ function renderGraph(){
     const pt = nodePos(c);
     const wc = isMe ? "#3a3436" : warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
     const initial = isMe ? "我" : String(c.name || "").slice(0, 1);
+    // 線頭珠：鐵桿實心、溫半透、冷幾乎空心只留一圈線
+    const wk = WARMTH[c.warmth] ? c.warmth : "warm";
+    const bead = isMe ? {fo:1, stroke:"#2b2724", sw:1.6}
+      : wk === "hot" ? {fo:1, stroke:"#a8442f", sw:1.6}
+      : wk === "warm" ? {fo:0.42, stroke:warmthColor("warm"), sw:1.5}
+      : {fo:0.2, stroke:warmthColor("cold"), sw:1.6};
     const dim = fset && !fset.has(c.id);
     const sleep = !isMe && !dim && dormantInfo(c.id).dormant;
     const hit = !isMe && gFocus === c.id;
@@ -3383,13 +3419,16 @@ function renderGraph(){
       ? `<text class="slabel" y="${(rN + ns * 2.35).toFixed(1)}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" ${isMe ? "" : `data-nid="${esc(c.id)}"`} transform="translate(${pt.x},${pt.y})">
-      ${hit ? `<circle r="${rN + 10}" fill="none" stroke="var(--accent)" stroke-opacity="0.32"
-        stroke-width="2.5" vector-effect="non-scaling-stroke"/>` : ""}
-      ${partner ? `<circle r="${rN + 5}" fill="none" stroke="${partnerColor()}" stroke-width="2.5" opacity="0.9"/>` : ""}
-      <circle r="${rN}" fill="${wc}" stroke="#ffffff" filter="url(#nsh)"/>
-      <circle r="${rN}" fill="url(#gsheen)" pointer-events="none"/>
+      ${hit ? `<circle r="${(rN + 9).toFixed(1)}" fill="none" stroke="var(--accent)" stroke-opacity="0.55"
+        stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` : ""}
+      ${partner ? `<circle r="${(rN + 5).toFixed(1)}" fill="none" stroke="${partnerColor()}" stroke-width="1.8"
+        stroke-dasharray="4.5 3.5" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity="0.95"/>` : ""}
+      <circle r="${rN}" fill="${wc}" fill-opacity="${bead.fo}" stroke="${bead.stroke}"
+        stroke-width="${bead.sw}" vector-effect="non-scaling-stroke"
+        ${hit ? 'filter="url(#nglow)"' : 'filter="url(#nsh)"'}/>
+      <circle r="${rN}" fill="url(#gsheen)" stroke="none" pointer-events="none"/>
       <text class="ninit" y="${(rN * 0.33).toFixed(1)}" font-size="${(rN * 0.8).toFixed(1)}"
-        fill="${readableOn(wc)}">${esc(initial)}</text>
+        fill="${bead.fo > 0.5 ? readableOn(wc) : "var(--ink)"}" opacity="${bead.fo > 0.5 ? 1 : 0.72}">${esc(initial)}</text>
       <text class="nlabel" y="${(rN + ns * 0.95).toFixed(1)}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
       ${sub}
     </g>`;
@@ -3398,7 +3437,7 @@ function renderGraph(){
   svg.innerHTML = defs + `<g id="gworld" transform="translate(${gview.tx},${gview.ty}) scale(${gview.s})">${groupHullsSVG(vis)}${edges}${nodes}${edgeLabels}</g>`;
   wrap.style.backgroundPosition = gview.tx + "px " + gview.ty + "px";
   const bs = 26 * gview.s;
-  wrap.style.backgroundSize = bs + "px " + bs + "px";
+  wrap.style.backgroundSize = "16px 16px, 16px 16px, " + bs + "px " + bs + "px, 100% 100%";
   updateFocusBar(fset ? gFocus : null);
 }
 
@@ -3408,7 +3447,7 @@ function applyGraphTransformOnly(){
   const wrap = document.getElementById("graph-wrap");
   wrap.style.backgroundPosition = gview.tx + "px " + gview.ty + "px";
   const bs = 26 * gview.s;
-  wrap.style.backgroundSize = bs + "px " + bs + "px";
+  wrap.style.backgroundSize = "16px 16px, 16px 16px, " + bs + "px " + bs + "px, 100% 100%";
 }
 
 /* 手勢：單指拖背景=平移、單指拖節點=移動節點（網絡模式）、雙指=縮放、
