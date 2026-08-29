@@ -794,7 +794,7 @@ const THEMES = {
     "chart-lo":"#d5bd93", "chart-lo2":"#ece0c9",
     "shadow-rgb":"55 45 30", "shadow-flood":"rgb(55,45,30)", dot:"#efe8db",
   }},
-  sketch: {label:"手繪感", vars:{
+  sketch: {label:"筆記本", vars:{
     paper:"#fdfaf2", card:"#fffdf7", ink:"#3f3a33", "ink-soft":"#7d7468",
     line:"#ece3d2", "line-strong":"#d9cdb8", "card-line":"#e5dbc7",
     accent:"#5a6b7d", "accent-soft":"#e8edf2", "accent-wash":"#f7f9fb",
@@ -856,6 +856,68 @@ function warmthColor(k){
 function partnerColor(){
   return (DB && DB.settings && DB.settings.partnerColor) || themeVar("partner");
 }
+/* ===== 手繪筆觸 =====
+   關係圖的圓與線都由程式重畫成「徒手畫」的路徑，而不是把畫好的圖形套濾鏡去抖——
+   濾鏡只能整體位移，控制不了起收筆與封口，遠看幾乎看不出手繪 */
+
+/* 確定性亂數：同一個人每次重繪要抖成一樣，否則畫面會不停跳動 */
+function seedRand(seed){
+  let s = 2166136261;
+  const str = String(seed);
+  for (let i = 0; i < str.length; i++){ s ^= str.charCodeAt(i); s = Math.imul(s, 16777619); }
+  return () => { s = (Math.imul(s, 1103515245) + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+}
+/* 一串點連成平滑曲線（相鄰點的中點當節點，原點當控制點） */
+function smoothPath(pts){
+  if (pts.length < 2) return "";
+  const f = n => n.toFixed(1);
+  let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
+  for (let i = 1; i < pts.length - 1; i++){
+    d += `Q${f(pts[i][0])} ${f(pts[i][1])} ${f((pts[i][0] + pts[i + 1][0]) / 2)} ${f((pts[i][1] + pts[i + 1][1]) / 2)}`;
+  }
+  const last = pts[pts.length - 1];
+  return d + `L${f(last[0])} ${f(last[1])}`;
+}
+/* 徒手畫的圈：半徑一路帶誤差，收筆會超過起點一點（沒對齊才像手畫的） */
+function sketchCircle(r, seed, wobble){
+  const rand = seedRand(seed);
+  const w = wobble == null ? 0.05 : wobble;
+  const start = rand() * Math.PI * 2;
+  const steps = 11;
+  const over = 0.9 + rand() * 1.4;            // 多畫的角度（單位：段）
+  const pts = [];
+  for (let i = 0; i <= steps + over; i++){
+    const a = start + (i / steps) * Math.PI * 2;
+    const rr = r * (1 + (rand() - 0.5) * 2 * w);
+    pts.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+  }
+  return smoothPath(pts);
+}
+/* 徒手畫的線：沿原本那條貝茲取樣，往垂直方向加偏移，兩端收斂中段最抖 */
+function sketchStroke(x1, y1, cx, cy, x2, y2, seed, amp){
+  const rand = seedRand(seed);
+  const n = 7, pts = [];
+  for (let i = 0; i <= n; i++){
+    const t = i / n, u = 1 - t;
+    const px = u * u * x1 + 2 * u * t * cx + t * t * x2;
+    const py = u * u * y1 + 2 * u * t * cy + t * t * y2;
+    const dx = 2 * u * (cx - x1) + 2 * t * (x2 - cx);
+    const dy = 2 * u * (cy - y1) + 2 * t * (y2 - cy);
+    const len = Math.hypot(dx, dy) || 1;
+    const off = (rand() - 0.5) * 2 * amp * Math.sin(Math.PI * t);
+    pts.push([px - dy / len * off, py + dx / len * off]);
+  }
+  return smoothPath(pts);
+}
+
+/* 徒手畫的方框：四邊各一筆，角落不會完美接合 */
+function sketchRect(x, y, w, h, seed, amp){
+  const seg = (ax, ay, bx, by, n) =>
+    sketchStroke(ax, ay, (ax + bx) / 2, (ay + by) / 2, bx, by, seed + n, amp);
+  return [seg(x, y, x + w, y, 1), seg(x + w, y, x + w, y + h, 2),
+          seg(x + w, y + h, x, y + h, 3), seg(x, y + h, x, y, 4)].join(" ");
+}
+
 /* 給定底色，回傳在它上面看得清楚的文字色 */
 function readableOn(hex){
   const n = parseInt(String(hex).replace("#", ""), 16);
@@ -3150,9 +3212,10 @@ function groupHullsSVG(vis){
     const dim = gFocus && !b.ids.includes(gFocus);
     return `<g class="ghull ${dim ? "dim" : ""}">
       <rect x="${b.x1}" y="${b.y1}" width="${b.x2 - b.x1}" height="${b.y2 - b.y1}"
-        rx="${Math.round(HULL_PAD * 0.55)}" fill="var(--accent-soft)" fill-opacity="0.42"
-        stroke="var(--accent)" stroke-opacity="0.28" stroke-width="1.4" stroke-dasharray="7 6"
-        vector-effect="non-scaling-stroke"${currentTheme() === "sketch" ? ' filter="url(#rough)"' : ""}/>
+        rx="${Math.round(HULL_PAD * 0.55)}" fill="var(--accent-soft)" fill-opacity="0.42" stroke="none"/>
+      <path d="${sketchRect(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1, "hull" + b.label, 3.2)}"
+        fill="none" stroke="var(--accent)" stroke-opacity="0.32" stroke-width="1.4"
+        stroke-dasharray="9 7" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
       <rect x="${b.x1 + 4}" y="${(b.y1 - hs * 1.62).toFixed(1)}"
         width="${(String(b.label).length * hs * 0.78 + hs * 0.9).toFixed(1)}" height="${(hs * 1.5).toFixed(1)}"
         rx="${(hs * 0.75).toFixed(1)}" fill="var(--card)" stroke="var(--accent)" stroke-opacity="0.22"
@@ -3242,6 +3305,12 @@ function renderGraph(){
   if (!gview.inited){ fitViewTo(drawList); gview.inited = true; }
 
   const R = 27;
+  // 連線多的人畫大一點，一眼看得出誰是核心
+  const degree = {};
+  rels.forEach(r => { degree[r.from] = (degree[r.from] || 0) + 1; degree[r.to] = (degree[r.to] || 0) + 1; });
+  const rOf = id => R * (1 + Math.min(degree[id] || 0, 6) * 0.05);
+  // 人一多或縮得很小，手繪筆觸只剩雜訊又拖慢畫面，退回乾淨的圓與線
+  const hand = drawList.length <= 48 && gview.s > 0.32;
   const defs = `<defs>
     <filter id="nsh" x="-40%" y="-40%" width="180%" height="180%">
       <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" style="flood-color:var(--shadow-flood)" flood-opacity="0.26"/>
@@ -3292,10 +3361,6 @@ function renderGraph(){
   const hitsTaken = (x, y, hw, hh) => taken.some(b =>
     x + hw > b.x1 && x - hw < b.x2 && y + hh > b.y1 && y - hh < b.y2);
 
-  // 手繪感主題：線條與圓形走抖動濾鏡，看起來像隨手畫的
-  const sketchy = currentTheme() === "sketch";
-  const roughAttr = sketchy ? ` filter="url(#rough)"` : "";
-
   const pkey = r => r.from < r.to ? r.from + "|" + r.to : r.to + "|" + r.from;
   const pairGroups = {};
   rels.forEach(r => { (pairGroups[pkey(r)] = pairGroups[pkey(r)] || []).push(r); });
@@ -3316,9 +3381,9 @@ function renderGraph(){
     if (r.from > r.to) spread = -spread;
     const baseAng = Math.atan2(dy, dx);
     const fan = spread * 0.44;                          // 端點扇開角度（弧度）
-    const rEnd = R + (t.directed ? 5 : 0);
+    const rEnd = rOf(r.to) + (t.directed ? 5 : 0);
     const a1 = baseAng + fan, a2 = baseAng + Math.PI - fan;
-    const x1 = pa.x + Math.cos(a1) * R, y1 = pa.y + Math.sin(a1) * R;
+    const x1 = pa.x + Math.cos(a1) * rOf(r.from), y1 = pa.y + Math.sin(a1) * rOf(r.from);
     const x2 = pb.x + Math.cos(a2) * rEnd, y2 = pb.y + Math.sin(a2) * rEnd;
     const off = spread * (30 / Math.max(gview.s, 0.12));   // 螢幕上恆定的弧高
     const nx = -dy / d, ny = dx / d;
@@ -3364,7 +3429,7 @@ function renderGraph(){
     // 空間夠不夠要用「標籤實際寬度」判斷，不能只看線長門檻：
     // 舊版對多重關係開例外強制顯示，短邊上兩個標籤會互相壓、還蓋住姓名
     const labelPx = t.label.length * ls * gview.s * 0.62;   // 標籤螢幕寬度估算
-    const edgePx = (d - R * 2) * gview.s;                    // 可見線段螢幕長度
+    const edgePx = (d - rOf(r.from) - rOf(r.to)) * gview.s;   // 可見線段螢幕長度
     // 箭頭大小依「佔線長比例」決定：大箭頭約 10px、小箭頭約 6px。
     // 用絕對像素一刀切會把單一關係的短邊也連坐，方向資訊整片消失
     const arrowMark = !t.directed ? null : (edgePx > 34 ? "arrow-" : edgePx > 16 ? "arrows-" : null);
@@ -3372,15 +3437,23 @@ function renderGraph(){
     const room = fit && edgePx > Math.max(24, labelPx * 0.75);
     if (room) taken.push({x1: lx - lhw, x2: lx + lhw, y1: ly - lhh, y2: ly + lhh});
     return {
-      path: `<path class="gedge"${roughAttr} d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}" fill="none"
-        stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
-        ${arrowMark ? `marker-end="url(#${arrowMark}${esc(t.key)})"` : ""}
-        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
-        stroke-linecap="round" opacity="${dim ? 0.11 : 0.9}"/>`
-        + (sketchy && !dim ? `<path class="gedge" filter="url(#rough2)" d="M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}"
-        fill="none" stroke="${t.color}" stroke-width="1.6" vector-effect="non-scaling-stroke"
-        ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
-        stroke-linecap="round" opacity="0.45"/>` : ""),
+      path: (() => {
+        const amp = Math.min(5.5, d * 0.022);
+        const dMain = hand ? sketchStroke(x1, y1, cx, cy, x2, y2, r.id + "a", amp)
+                           : `M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`;
+        const main = `<path class="gedge" d="${dMain}" fill="none"
+          stroke="${t.color}" stroke-width="2.4" vector-effect="non-scaling-stroke"
+          ${arrowMark ? `marker-end="url(#${arrowMark}${esc(t.key)})"` : ""}
+          ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
+          stroke-linecap="round" stroke-linejoin="round" opacity="${dim ? 0.11 : 0.92}"/>`;
+        // 再描一次、抖法不同、比較細也比較淡：手畫的線很少一筆到位
+        const second = (hand && !dim)
+          ? `<path class="gedge" d="${sketchStroke(x1, y1, cx, cy, x2, y2, r.id + "b", amp * 0.55)}" fill="none"
+            stroke="${t.color}" stroke-width="1.2" vector-effect="non-scaling-stroke"
+            ${t.dash ? `stroke-dasharray="${esc(t.dash)}"` : ""}
+            stroke-linecap="round" opacity="0.38"/>` : "";
+        return main + second;
+      })(),
       label: room
         ? `<text class="elabel" x="${lx}" y="${ly + ls * 0.35}" font-size="${ls.toFixed(1)}" fill="${t.color}" opacity="${dim ? 0.12 : 1}">${esc(t.label)}</text>`
         : ""
@@ -3392,6 +3465,7 @@ function renderGraph(){
 
   const nodes = drawList.map(c => {
     const isMe = c.id === "__me__";
+    const rN = isMe ? R * 1.12 : rOf(c.id);
     const pt = nodePos(c);
     const wc = isMe ? "#3a3436" : warmthColor(WARMTH[c.warmth] ? c.warmth : "warm");
     const initial = isMe ? "我" : String(c.name || "").slice(0, 1);
@@ -3403,17 +3477,30 @@ function renderGraph(){
     const partner = !isMe && isPartner(c);
     const subTxt = gMode === "org" ? orgSubLabel(c) : "";
     const sub = subTxt
-      ? `<text class="slabel" y="${R + ns * 2.35}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
+      ? `<text class="slabel" y="${(rN + ns * 2.35).toFixed(1)}" font-size="${(ns * 0.78).toFixed(1)}">${esc(subTxt)}</text>`
       : "";
     return `<g class="gnode ${dim ? "dim" : ""} ${sleep ? "sleep" : ""} ${hit ? "hit" : ""}" ${isMe ? "" : `data-nid="${esc(c.id)}"`} transform="translate(${pt.x},${pt.y})">
-      ${hit ? `<circle r="${R + 10}" fill="none" stroke="var(--accent)" stroke-opacity="0.32"
-        stroke-width="2.5" vector-effect="non-scaling-stroke"/>` : ""}
-      ${partner ? `<circle r="${R + 5}" fill="none" stroke="${partnerColor()}" stroke-width="2.5" opacity="0.9"/>` : ""}
-      <circle r="${R}" fill="${wc}" stroke="#ffffff" filter="url(#${sketchy ? "nsh-rough" : "nsh"})"/>
-      <circle r="${R}" fill="url(#gsheen)" pointer-events="none"/>
-      <text class="ninit" y="${(R * 0.33).toFixed(1)}" font-size="${(R * 0.84).toFixed(1)}"
+      ${hit ? (hand
+        ? `<path d="${sketchCircle(rN + 10, c.id + "hit", 0.035)}" fill="none" stroke="var(--accent)"
+            stroke-opacity="0.35" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`
+        : `<circle r="${rN + 10}" fill="none" stroke="var(--accent)" stroke-opacity="0.32"
+            stroke-width="2.5" vector-effect="non-scaling-stroke"/>`) : ""}
+      ${partner ? (hand
+        ? `<path d="${sketchCircle(rN + 5, c.id + "p", 0.04)}" fill="none" stroke="${partnerColor()}"
+            stroke-width="2.2" vector-effect="non-scaling-stroke" stroke-linecap="round" opacity="0.9"/>`
+        : `<circle r="${rN + 5}" fill="none" stroke="${partnerColor()}" stroke-width="2.5" opacity="0.9"/>`) : ""}
+      ${hand
+        ? `<path d="${sketchCircle(rN, c.id + "f", 0.045)}" fill="${wc}" stroke="none" filter="url(#nsh)"/>
+           <path d="${sketchCircle(rN, c.id + "f", 0.045)}" fill="url(#gsheen)" stroke="none" pointer-events="none"/>
+           <path d="${sketchCircle(rN, c.id + "f", 0.045)}" fill="none" stroke="var(--paper)"
+             stroke-width="2.4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+           <path d="${sketchCircle(rN * 1.04, c.id + "s2", 0.05)}" fill="none" stroke="${wc}"
+             stroke-width="1.1" vector-effect="non-scaling-stroke" stroke-linecap="round" opacity="0.34"/>`
+        : `<circle r="${rN}" fill="${wc}" stroke="#ffffff" filter="url(#nsh)"/>
+           <circle r="${rN}" fill="url(#gsheen)" pointer-events="none"/>`}
+      <text class="ninit" y="${(rN * 0.33).toFixed(1)}" font-size="${(rN * 0.8).toFixed(1)}"
         fill="${readableOn(wc)}">${esc(initial)}</text>
-      <text class="nlabel" y="${R + ns * 0.95}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
+      <text class="nlabel" y="${(rN + ns * 0.95).toFixed(1)}" font-size="${ns.toFixed(1)}">${esc(c.name)}</text>
       ${sub}
     </g>`;
   }).join("");
