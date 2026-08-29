@@ -35,6 +35,7 @@ SHARED = [
     ("舊裝置設定升級", "function upgradeLegacyColors("),
     ("六套配色主題", "const THEMES = {"),
     ("關係針法編碼", "const RELTYPE_STITCH = {"),
+    ("首頁快捷鈕視覺重心", ".qa button.lead .ic{"),
 ]
 
 # 四檔的關係圖畫法必須逐字相同（起訖以這兩個函式為界）
