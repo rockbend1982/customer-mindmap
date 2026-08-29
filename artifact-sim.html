@@ -131,6 +131,10 @@ h2{font-size:13px; color:var(--ink-soft); font-weight:600; margin:22px 0 8px; le
   font-size:15px; font-weight:600; color:#fff;
 }
 .dot-hot{background:var(--hot);} .dot-warm{background:var(--warm);} .dot-cold{background:var(--cold); color:var(--cold-fg);}
+/* 節點形狀選織片時，名單頭像、人員膠囊、圖例色點一起變方，才不會一邊圓一邊方 */
+body.shape-patch .person .dot,
+body.shape-patch .ppill .av,
+body.shape-patch #graph-legend .swdot{border-radius:26%;}
 .person{padding-top:14px;}
 .person .info{flex:1; min-width:0;}
 .person .name-row{display:flex; align-items:center; flex-wrap:wrap; gap:5px 6px;}
@@ -876,6 +880,7 @@ function applySkin(){
   document.body.style.removeProperty("--font-body");
   Object.keys(vars).forEach(k => document.body.style.setProperty("--" + k, vars[k]));
   document.body.classList.toggle("theme-sketch", theme === "sketch");
+  document.body.classList.toggle("shape-patch", currentShape() === "patch");
   ["hot", "warm", "cold"].forEach(k => {
     const custom = DB && DB.settings && DB.settings.warmthColors && DB.settings.warmthColors[k];
     if (custom) document.body.style.setProperty("--" + k, custom);
@@ -3759,7 +3764,7 @@ function renderSettings(){
         <span class="sw" style="background:var(--accent); border-radius:${k === "round" ? "50%" : "4px"};"></span>${esc(NODE_SHAPES[k])}</button>`).join("");
     srow.querySelectorAll("[data-shape]").forEach(btn => btn.addEventListener("click", () => {
       DB.settings.nodeShape = btn.dataset.shape;
-      save(); renderSettings();
+      save(); applySkin(); renderSettings();
     }));
   }
   ["hot", "warm", "cold"].forEach(k => {
