@@ -62,11 +62,13 @@ header h1{align-self:baseline;}
 header .sub{align-self:baseline;}
 header h1{font-size:20px; margin:0; letter-spacing:.34em; font-family:var(--font-head); font-weight:600; color:var(--ink);}
 header .sub{font-size:12px; color:var(--ink-soft);}
-#present-toggle{
-  margin-left:auto; flex:0 0 auto; border:1px solid var(--card-line); background:var(--card);
-  color:var(--ink-soft); border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;
+/* 開關在設定頁。這顆只在展示中出現，讓她隨時看得到自己還開著、也點得掉 */
+#present-toggle{display:none;}
+body.presenting #present-toggle{
+  display:inline-block; margin-left:auto; flex:0 0 auto;
+  border:1px solid var(--accent); background:var(--accent); color:#fff;
+  border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;
 }
-body.presenting #present-toggle{background:var(--accent); border-color:var(--accent); color:#fff;}
 /* 展示中整條 header 加一條底線，免得忘了自己還開著 */
 body.presenting header{box-shadow:inset 0 -3px 0 var(--accent);}
 main{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);}
@@ -464,7 +466,7 @@ details.detfold > div{padding:0 0 14px;}
     </svg>
     <h1>織網</h1><span class="chip" style="background:#212121;color:#fff;flex:0 0 auto;">多群組示範</span>
     <span class="sub" id="head-stats"></span>
-    <button id="present-toggle" type="button" title="把手機轉給別人看時，遮掉金額與私下的記錄">展示</button>
+    <button id="present-toggle" type="button" title="點一下離開展示模式">展示中</button>
   </header>
   <main id="main">
 
@@ -536,6 +538,12 @@ details.detfold > div{padding:0 0 14px;}
         <div class="themes" id="theme-row"></div>
         <label>關係圖的節點形狀</label>
         <div class="themes" id="shape-row"></div>
+        <label>展示模式</label>
+        <div class="row">
+          <span class="grow muted" style="font-size:13px;">把手機轉給夥伴或客戶看時，遮掉金額、聯絡方式與你私下寫的記錄。</span>
+          <button class="btn small" id="present-switch" style="flex:0 0 auto;">開啟</button>
+        </div>
+        <div class="muted" id="present-state" style="margin-top:6px; font-size:12.5px;"></div>
         <label>熟度顏色（點色塊修改）</label>
         <div class="row" id="warmth-row"></div>
         <label>夥伴外框顏色（關係圖節點外環、名單與詳情的夥伴徽章）</label>
@@ -1239,8 +1247,6 @@ function togglePresent(){
   DB.settings = Object.assign({}, DB.settings, {presentMode: !isPresenting()});
   save();
   document.body.classList.toggle("presenting", isPresenting());
-  const b = document.getElementById("present-toggle");
-  if (b) b.textContent = isPresenting() ? "展示中" : "展示";
   refreshView();
 }
 
@@ -3883,6 +3889,15 @@ function renderSettings(){
       save(); applySkin(); renderSettings();
     }));
   }
+  const psw = document.getElementById("present-switch");
+  if (psw){
+    psw.textContent = isPresenting() ? "關閉" : "開啟";
+    psw.classList.toggle("primary", !isPresenting());
+    document.getElementById("present-state").textContent = isPresenting()
+      ? "展示中：金額、電話、備註與往來內容都先遮起來了，業績分頁也收起來。"
+      : "現在是一般模式，全部資料都看得到。";
+    psw.onclick = togglePresent;
+  }
   const srow = document.getElementById("shape-row");
   if (srow){
     srow.innerHTML = Object.keys(NODE_SHAPES).map(k =>
@@ -4150,7 +4165,7 @@ applySkin();
 document.body.classList.toggle("presenting", isPresenting());
 {
   const pt = document.getElementById("present-toggle");
-  if (pt){ pt.textContent = isPresenting() ? "展示中" : "展示"; pt.addEventListener("click", togglePresent); }
+  if (pt) pt.addEventListener("click", togglePresent);
 }
 renderHeadStats();
 showView("home");
