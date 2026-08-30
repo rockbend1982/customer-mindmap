@@ -1755,7 +1755,8 @@ function personRowHTML(c){
   const meta = [c.company, tagTxt].filter(Boolean).join("・") || "尚無備註資料";
   // 一整排長得一樣時掃不出誰該理，補一行「多久沒聯絡」，太久沒動的加虛線環
   const dm = dormantInfo(c.id);
-  const last = dm.days == null ? "從未往來" : dm.days === 0 ? "今天聊過" : dm.days + " 天前";
+  const last = dm.never ? (dm.days === 0 ? "今天加入" : "還沒往來")
+    : dm.days === 0 ? "今天聊過" : dm.days + " 天前";
   return `<div class="person${dm.dormant ? " sleep" : ""}" data-open="${esc(c.id)}">
     <div class="dot dot-${c.warmth}" style="color:${readableOn(warmthColor(WARMTH[c.warmth] ? c.warmth : "warm"))};">${esc(c.name.slice(0,2))}</div>
     <div class="info">
@@ -2093,7 +2094,7 @@ function renderHomeInsights(){
     hub && relCount[hub.id] ? line("樞紐人物", nameLink(hub) + ` <span class="muted">${relCount[hub.id]} 條連結</span>`) : "",
     engine ? line("轉介發動機", nameLink(engine) + ` <span class="muted">介紹了 ${introOut[engine.id]} 人</span>`) : "",
     islands.length ? line("孤島客戶", islands.slice(0, 3).map(nameLink).join("、") + (islands.length > 3 ? ` <span class="muted">…共 ${islands.length} 位</span>` : "")) : "",
-    hotDorm && hotDorm.d.dormant ? line("該回溫的" + esc(warmthLabel("hot")), nameLink(hotDorm.c) + ` <span class="muted">${hotDorm.d.days == null ? "從未往來" : hotDorm.d.days + " 天沒聯絡"}</span>`) : "",
+    hotDorm && hotDorm.d.dormant ? line("該回溫的" + esc(warmthLabel("hot")), nameLink(hotDorm.c) + ` <span class="muted">${hotDorm.d.never ? "還沒往來" : hotDorm.d.days + " 天沒聯絡"}</span>`) : "",
   ].filter(Boolean);
   // monthRow 是整塊 hero，orgRows 才是條列，兩者分開放才不會混在同一組小標下
   const orgOnly = topRows.filter(x => x !== monthRow);
@@ -2114,7 +2115,7 @@ function renderHomeInsights(){
       dorm.slice(0, 5).map(x => `<div class="row" style="margin-bottom:9px;">
         <span class="grow" data-open="${esc(x.c.id)}" style="cursor:pointer;"><b>${esc(x.c.name)}</b>
           <span class="chip warmth-${x.c.warmth}" style="margin:0 0 0 4px;">${esc(warmthLabel(x.c.warmth))}</span></span>
-        <span class="muted">${x.d.days == null ? "從未往來" : x.d.days + " 天"}</span></div>`).join("") + `</div>`
+        <span class="muted">${x.d.never ? "還沒往來 " + x.d.days + " 天" : x.d.days + " 天"}</span></div>`).join("") + `</div>`
     : "";
 }
 function renderHomeSearch(){
@@ -2856,9 +2857,14 @@ function dormantLimit(){
 }
 function dormantInfo(id){
   const lc = lastContact(id);
-  if (!lc) return {days:null, dormant:true};
-  const days = Math.max(0, Math.floor((Date.now() - new Date(lc + "T00:00:00").getTime()) / 86400000));
-  return {days, dormant: days > dormantLimit()};
+  // 還沒有往來紀錄的人，改從「建檔那天」起算。直接判定沉睡的話，
+  // 今天剛加進來的人會馬上被列進「該聯絡了」
+  const c = getCustomer(id);
+  const base = lc ? new Date(lc + "T00:00:00").getTime()
+    : (c && c.createdAt ? c.createdAt : null);
+  if (base == null) return {days:null, dormant:true, never:true};
+  const days = Math.max(0, Math.floor((Date.now() - base) / 86400000));
+  return {days, dormant: days > dormantLimit(), never: !lc};
 }
 
 function ensurePositions(){
@@ -3197,7 +3203,7 @@ function updateFocusBar(id){
   bar.style.display = "flex";
   const orgTxt = isPartner(c) || uplineOf(id) || downlinesOf(id).length
     ? `第 ${generationOf(id)} 代・直屬 ${downlinesOf(id).length}・線上 ${orgSize(id)} 人`
-    : (dz.days == null ? "從未往來" : "上次聯絡 " + dz.days + " 天前");
+    : (dz.never ? "還沒往來" : "上次聯絡 " + dz.days + " 天前");
   bar.innerHTML = `<span style="font-weight:700;">${esc(c.name)}</span>
     <span class="chip warmth-${c.warmth}" style="margin:0;">${esc(warmthLabel(c.warmth))}</span>
     <span class="muted grow">${esc(orgTxt)}</span>
