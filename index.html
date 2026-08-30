@@ -70,6 +70,13 @@ header h1{align-self:baseline;}
 header .sub{align-self:baseline;}
 header h1{font-size:20px; margin:0; letter-spacing:.34em; font-family:var(--font-head); font-weight:600; color:var(--ink);}
 header .sub{font-size:12px; color:var(--ink-soft);}
+#present-toggle{
+  margin-left:auto; flex:0 0 auto; border:1px solid var(--card-line); background:var(--card);
+  color:var(--ink-soft); border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;
+}
+body.presenting #present-toggle{background:var(--accent); border-color:var(--accent); color:#fff;}
+/* 展示中整條 header 加一條底線，免得忘了自己還開著 */
+body.presenting header{box-shadow:inset 0 -3px 0 var(--accent);}
 main{flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);}
 .view{display:none; padding:16px;}
 .view.active{display:block;}
@@ -464,6 +471,7 @@ details.detfold > div{padding:0 0 14px;}
     </svg>
     <h1>織網</h1>
     <span class="sub" id="head-stats"></span>
+    <button id="present-toggle" type="button" title="把手機轉給別人看時，遮掉金額與私下的記錄">展示</button>
   </header>
   <main id="main">
 
@@ -1096,6 +1104,8 @@ function migrate(d){
   if (NODE_SHAPES[st.nodeShape]) base.settings.nodeShape = st.nodeShape;
   // settings 是白名單制，沒列進來的欄位每次載入都會被丟掉
   if (typeof st.seedVer === "number") base.settings.seedVer = st.seedVer;
+  if (st.presentMode) base.settings.presentMode = true;
+  if (st.dragHinted) base.settings.dragHinted = true;   // 沒列進來的話，拖曳提示每次重開都會再跳一次
   base.lastBackupAt = isStr(d.lastBackupAt) ? d.lastBackupAt : null;
   base._dropped = Object.values(dropped).some(n => n > 0) ? dropped : null;
   return base;
@@ -1227,7 +1237,22 @@ function trialsOf(id){
 function spentOf(id){
   return purchasesOf(id).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
 }
+/* 展示模式：把手機轉給夥伴或客戶看關係圖時，別人的金額、聯絡方式與你私下的記錄
+   不該一起出現在畫面上。姓名、公司、標籤、熟度與關係照常顯示 */
+function isPresenting(){ return !!(DB && DB.settings && DB.settings.presentMode); }
+const MASK_NUM = "－－";
+const MASK_TXT = "・・・・・・";
+function togglePresent(){
+  DB.settings = Object.assign({}, DB.settings, {presentMode: !isPresenting()});
+  save();
+  document.body.classList.toggle("presenting", isPresenting());
+  const b = document.getElementById("present-toggle");
+  if (b) b.textContent = isPresenting() ? "展示中" : "展示";
+  refreshView();
+}
+
 function money(n){
+  if (isPresenting()) return MASK_NUM;
   return "NT$ " + Math.round(n).toLocaleString("en-US");
 }
 /* 接觸＝互動、購買、體驗三種都算；只看互動會把「上週才碰面體驗」的人誤判成失聯。
@@ -1353,7 +1378,9 @@ function salesRows(){
   const from = salesFrom();
   return DB.purchases.filter(x => !isTrial(x) && x.date >= from);
 }
+function svText(n){ return isPresenting() ? "SV " + MASK_NUM : "SV " + Math.round(n); }
 function shortMoney(n){
+  if (isPresenting()) return MASK_NUM;
   n = Math.round(Number(n) || 0);
   // 百萬以下保留一位小數，否則各項加起來會跟總額差一截（20.5＋2 看起來才等於 22.5）
   if (n >= 10000) return (n / 10000).toFixed(n >= 1000000 ? 0 : 1).replace(/\.0$/, "") + " 萬";
@@ -1414,6 +1441,12 @@ function repurchaseList(){
 
 function renderSales(){
   const box = document.getElementById("sales-body");
+  if (isPresenting()){
+    document.getElementById("sales-filter").innerHTML = "";
+    box.innerHTML = `<div class="card"><div class="card-title">展示模式中</div>
+      <div class="muted" style="margin-top:6px;">業績整頁先收起來了。要看的話，點右上角的「展示中」關掉。</div></div>`;
+    return;
+  }
   document.getElementById("sales-filter").innerHTML = SALES_RANGES.map(([k, label]) =>
     `<button class="fbtn ${gSalesRange === k ? "on" : ""}" data-srange="${k}">${label}</button>`).join("");
 
@@ -1791,7 +1824,8 @@ function renderHome(){
       return `<div class="ilog" data-open="${esc(i.customerId)}"${tt.color ? ` style="border-left-color:${tt.color};"` : ""}>
         <span class="who">${esc(c ? c.name : "（已刪除）")}</span> <span class="when">${esc(i.date)}</span>
         ${tt.label ? `<span class="chip" style="background:${tt.color};color:#fff;margin-left:4px;">${tt.label}</span>` : ""}
-        <div class="txt">${esc(i.text)}${i.extra ? "\n反應：" + esc(i.extra) : ""}</div></div>`;
+        <div class="txt">${isPresenting() ? MASK_TXT
+          : esc(i.text) + (i.extra ? "\n反應：" + esc(i.extra) : "")}</div></div>`;
     }).join("") + `</div>`;
   }
   renderHomeToday();
@@ -1849,7 +1883,7 @@ function todoRow(c, days, why, taskId){
     <span class="todo-dot" style="background:${warmthColor(WARMTH[c.warmth] ? c.warmth : "warm")};"></span>
     <div class="todo-main" data-open="${esc(c.id)}">
       <div class="todo-name">${esc(c.name)}${todoTag(days)}</div>
-      <div class="todo-why">${why}</div>
+      <div class="todo-why">${isPresenting() ? String(why).split("・")[0] + "・" + MASK_TXT : why}</div>
     </div>
     ${taskId ? `<button class="todo-check" data-donetask="${esc(taskId)}" aria-label="完成">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -2041,7 +2075,7 @@ function renderHomeInsights(){
     ? `<div class="hero">
         <div class="lab">本月業績</div>
         <div class="val">${money(thisSum)}</div>
-        <div class="sub">${cntOf(ym)} 筆${thisSv ? "・SV " + Math.round(thisSv) : ""}${
+        <div class="sub">${cntOf(ym)} 筆${thisSv ? "・" + svText(thisSv) : ""}${
           lastSum ? `　上月 ${money(lastSum)}（${thisSum >= lastSum ? "多" : "少"} ${money(Math.abs(thisSum - lastSum)).replace("NT$ ", "")}）` : ""}</div>
       </div>`
     : "";
@@ -2169,8 +2203,8 @@ function openDetail(id){
   const trials = trialsOf(id);
   const spent = spentOf(id);
   const fields = [
-    ["電話", esc(c.phone)],
-    ["LINE", esc(c.lineId)],
+    ["電話", isPresenting() ? "" : esc(c.phone)],
+    ["LINE", isPresenting() ? "" : esc(c.lineId)],
     ["生日", c.birthday ? esc(c.birthday) + (birthdayInDays(c, 30) !== null ? `　<b>${birthdayInDays(c, 30) === 0 ? "就是今天" : birthdayInDays(c, 30) + " 天後"}</b>` : "") : ""],
     ["公司／職業", esc(c.company)],
     ["怎麼認識的", esc(c.source)],
@@ -2198,10 +2232,10 @@ function openDetail(id){
     const lines = o.items.map(x =>
       `<div><b>${esc(x.item)}</b>${(x.qty && x.qty > 1) ? ` ×${x.qty}` : ""}${
         !trial && Number(x.amount) ? "　" + money(Number(x.amount)) : ""}${
-        !trial && Number(x.sv) ? "　SV " + Math.round(x.sv) : ""}</div>`).join("")
-      + ((!trial && o.items.length > 1) ? `<div class="muted" style="margin-top:2px;">合計 ${money(sum)}${sumSv ? "・SV " + Math.round(sumSv) : ""}</div>` : "")
-      + ((trial && o.reaction) ? `<div class="muted" style="margin-top:2px;">反應：${esc(o.reaction)}</div>` : "")
-      + (o.note ? `<div class="muted" style="margin-top:2px;">${esc(o.note)}</div>` : "");
+        !trial && Number(x.sv) ? "　" + svText(x.sv) : ""}</div>`).join("")
+      + ((!trial && o.items.length > 1) ? `<div class="muted" style="margin-top:2px;">合計 ${money(sum)}${sumSv ? "・" + svText(sumSv) : ""}</div>` : "")
+      + ((trial && o.reaction && !isPresenting()) ? `<div class="muted" style="margin-top:2px;">反應：${esc(o.reaction)}</div>` : "")
+      + ((o.note && !isPresenting()) ? `<div class="muted" style="margin-top:2px;">${esc(o.note)}</div>` : "");
     return `<div class="ilog"${trial ? ` style="border-left-color:${partnerColor()};"` : ""}>`
       + `<span class="when">${esc(o.date)}</span>`
       + `<button class="btn small ghost" data-delorder="${esc(o.key)}" style="float:right;">刪</button>`
@@ -2220,7 +2254,7 @@ function openDetail(id){
       ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
     </div>
 
-    ${(c.phone || c.lineId) ? `<div class="qcontact">
+    ${(!isPresenting() && (c.phone || c.lineId)) ? `<div class="qcontact">
       ${c.phone ? `<a href="tel:${esc(c.phone)}">撥電話</a>` : ""}
       ${c.lineId ? `<a href="https://line.me/ti/p/~${encodeURIComponent(c.lineId)}" target="_blank" rel="noopener">LINE</a>` : ""}
     </div>` : ""}
@@ -2235,16 +2269,16 @@ function openDetail(id){
       <button class="btn grow" id="d-edit">編輯</button>
     </div>
 
-    ${c.preference ? `<div style="margin-top:14px;"><span class="muted">偏好／需求</span>
+    ${(c.preference && !isPresenting()) ? `<div style="margin-top:14px;"><span class="muted">偏好／需求</span>
       <div class="card" style="margin-top:4px; margin-bottom:0; white-space:pre-wrap;">${esc(c.preference)}</div></div>` : ""}
-    ${c.note ? `<div class="card" style="margin-top:12px; margin-bottom:0; white-space:pre-wrap;">${esc(c.note)}</div>` : ""}
+    ${(c.note && !isPresenting()) ? `<div class="card" style="margin-top:12px; margin-bottom:0; white-space:pre-wrap;">${esc(c.note)}</div>` : ""}
 
     <div style="margin-top:16px;">
     ${ts.length ? fold("待辦", ts.length + " 件", ts.map(t => {
         const d = daysUntil(t.due);
         return `<div class="row" style="margin-bottom:8px;">
           <button class="btn small" data-donetask="${esc(t.id)}" style="flex:0 0 auto;">完成</button>
-          <span class="grow">${esc(t.text)}</span>
+          <span class="grow">${isPresenting() ? MASK_TXT : esc(t.text)}</span>
           <span class="muted">${esc(t.due)}${d < 0 ? "（逾期）" : d === 0 ? "（今天）" : ""}</span></div>`;
       }).join(""), true) : ""}
 
@@ -2261,7 +2295,7 @@ function openDetail(id){
         `<div class="ilog"><span class="when">${esc(i.date)}</span>
          <button class="btn small ghost" data-dellog="${esc(i.id)}" style="float:right;">刪</button>
          <button class="btn small ghost" data-editlog="${esc(i.id)}" style="float:right; color:var(--ink-soft);">改</button>
-         <div class="txt">${esc(i.text)}</div></div>`).join("")
+         <div class="txt">${isPresenting() ? MASK_TXT : esc(i.text)}</div></div>`).join("")
         : `<div class="muted">還沒有互動紀錄。</div>`, false)}
 
     ${fold("關係", rels.length ? rels.length + " 條" : "還沒有",
@@ -3975,6 +4009,11 @@ document.getElementById("import-file").addEventListener("change", e => {
 DB = loadDB();
 upgradeLegacyColors();
 applySkin();
+document.body.classList.toggle("presenting", isPresenting());
+{
+  const pt = document.getElementById("present-toggle");
+  if (pt){ pt.textContent = isPresenting() ? "展示中" : "展示"; pt.addEventListener("click", togglePresent); }
+}
 renderHeadStats();
 showView("home");
 window.addEventListener("resize", () => {
