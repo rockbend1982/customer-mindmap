@@ -15,7 +15,7 @@
   --accent:#a86a72; --accent-soft:#f7ece9; --accent-wash:#fdf8f7;
   --accent-hover:#8f545c; --accent-active:#7a464e;
   --btn-line:#e0d2ce; --btn-primary:#a86a72;
-  /* 夥伴用冷的藍灰，跟暖色主色明確分開，才不會跟「鐵桿」的暖紅混淆 */
+  /* 經營者用冷的藍灰，跟暖色主色明確分開，才不會跟「鐵桿」的暖紅混淆 */
   --partner:#6d7c8a;
   --hot:#b8503f; --warm:#6b5f60; --cold:#c9c2c3; --cold-fg:#ffffff;
   --hot-bg:#f9e9e5; --warm-bg:#f0ecec; --cold-bg:#f5f2f2;
@@ -152,6 +152,7 @@ body.shape-patch #graph-legend .swdot{border-radius:26%;}
 .person .name-row{display:flex; align-items:center; flex-wrap:wrap; gap:5px 6px;}
 .person .name{font-weight:600;}
 .person .chip.partner{background:var(--partner); color:#fff;}
+.chip.enjoy{background:var(--accent-soft); color:var(--accent-active); font-weight:600;}
 .person .meta{font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px;}
 .person .side{flex:0 0 auto; align-self:center; text-align:right;}
 .person .amount{font-size:12.5px; font-weight:600; color:var(--ink); white-space:nowrap;}
@@ -540,13 +541,13 @@ details.detfold > div{padding:0 0 14px;}
         <div class="themes" id="shape-row"></div>
         <label>展示模式</label>
         <div class="row">
-          <span class="grow muted" style="font-size:13px;">把手機轉給夥伴或客戶看時，遮掉金額、聯絡方式與你私下寫的記錄。</span>
+          <span class="grow muted" style="font-size:13px;">把手機轉給經營者或客戶看時，遮掉金額、聯絡方式與你私下寫的記錄。</span>
           <button class="btn small" id="present-switch" style="flex:0 0 auto;">開啟</button>
         </div>
         <div class="muted" id="present-state" style="margin-top:6px; font-size:12.5px;"></div>
         <label>熟度顏色（點色塊修改）</label>
         <div class="row" id="warmth-row"></div>
-        <label>夥伴外框顏色（關係圖節點外環、名單與詳情的夥伴徽章）</label>
+        <label>經營者外框顏色（關係圖節點外環、名單與詳情的經營者徽章）</label>
         <div class="row">
           <input type="color" class="colorpick" id="pc-color">
           <span class="grow"></span>
@@ -764,15 +765,20 @@ const CATALOG = [
 ];
 const CATALOG_DATE = "2026-08-28";
 
+/* 經營者與自用客戶都是使用者的下線；Enjoy 是自用客戶的一種，業績算法不另外區分 */
 const ROLES = {
+  partner:  {label:"經營者"},
   customer: {label:"自用客戶"},
-  partner:  {label:"夥伴"},
-  both:     {label:"夥伴＋自用"},
+  enjoy:    {label:"Enjoy"},
 };
-function roleOf(c){ return ROLES[c && c.role] ? c.role : "customer"; }
-function isPartner(c){ return roleOf(c) !== "customer"; }
+function roleOf(c){
+  if (c && c.role === "partner") return "partner";   // 舊資料的「經營者＋自用」就是經營者
+  return ROLES[c && c.role] ? c.role : "customer";
+}
+function isPartner(c){ return roleOf(c) === "partner"; }
+function isEnjoy(c){ return roleOf(c) === "enjoy"; }
 
-/* 每套主題是一組完整的 CSS 變數。熟度色與夥伴色也屬於主題，
+/* 每套主題是一組完整的 CSS 變數。熟度色與經營者色也屬於主題，
    但使用者若自己調過，那個自訂值永遠優先（設定頁按「恢復預設」才會回到主題色） */
 const THEMES = {
   rose: {label:"玫瑰褐", vars:{
@@ -1013,7 +1019,7 @@ function migrate(d){
     lineId: str(c.lineId), birthday: isBirthday(c.birthday) ? c.birthday : "",
     tags: Array.isArray(c.tags) ? c.tags.filter(isStr).slice(0, 30) : [],
     warmth: WARMTH[c.warmth] ? c.warmth : "warm",
-    role: ROLES[c.role] ? c.role : "customer",
+    role: c.role === "both" ? "partner" : (ROLES[c.role] ? c.role : "customer"),
     preference: str(c.preference), note: str(c.note),
     pos: (c.pos && Number.isFinite(Number(c.pos.x)) && Number.isFinite(Number(c.pos.y)))
       ? {x:Number(c.pos.x), y:Number(c.pos.y)} : null,
@@ -1238,7 +1244,7 @@ function trialsOf(id){
 function spentOf(id){
   return purchasesOf(id).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
 }
-/* 展示模式：把手機轉給夥伴或客戶看關係圖時，別人的金額、聯絡方式與你私下的記錄
+/* 展示模式：把手機轉給經營者或客戶看關係圖時，別人的金額、聯絡方式與你私下的記錄
    不該一起出現在畫面上。姓名、公司、標籤、熟度與關係照常顯示 */
 function isPresenting(){ return !!(DB && DB.settings && DB.settings.presentMode); }
 const MASK_NUM = "－－";
@@ -1282,7 +1288,7 @@ function lastContact(id){
 const SALES_RANGES = [["6m", "近 6 個月"], ["year", "今年"], ["all", "全部"]];
 let gSalesRange = "6m";
 let gProdSort = "amount";    // amount｜qty｜buyers
-let gProdScope = "all";      // all＝含夥伴進貨｜retail＝只算自用客戶
+let gProdScope = "all";      // all＝含經營者進貨｜retail＝只算自用客戶
 let gCustSort = "amount";    // amount｜orders
 
 /* 訂單清單：KPI 點開、點某個月的柱子都用這一份 */
@@ -1409,16 +1415,16 @@ function salesMonths(){
   }
   return out;
 }
-/* 夥伴（含「夥伴＋自用」）跟自己進的貨算組織那塊，不算零售業績 */
+/* 經營者跟自己進的貨算組織那塊，不算零售業績 */
 function fromPartner(id){
   const c = getCustomer(id);
   return !!(c && isPartner(c));
 }
-/* 直屬夥伴＝身份是夥伴、且沒有上線的人（組織圖裡直接掛在「我」底下那一層） */
+/* 直屬下線＝沒有上線的人。經營者與自用客戶都算，兩種都是使用者的下線 */
 function directPartners(){
-  return DB.customers.filter(c => isPartner(c) && !uplineOf(c.id));
+  return DB.customers.filter(c => !uplineOf(c.id));
 }
-/* 一條線的消費＝這位夥伴自己＋他底下所有下線，範圍限定在傳進來的那批紀錄 */
+/* 一條線的消費＝這個人自己＋他底下所有下線，範圍限定在傳進來的那批紀錄 */
 function lineSpend(id, rows){
   const ids = new Set([id].concat(orgMembers(id)));
   return rows.filter(x => ids.has(x.customerId)).reduce((t, x) => t + (Number(x.amount) || 0), 0);
@@ -1517,7 +1523,7 @@ function renderSales(){
       (mSum[thisKey] || mSum[lastKey]) ? `（${diff >= 0 ? "多" : "少"} ${money(Math.abs(diff)).replace("NT$ ", "")}）` : ""}</div>` : ""}
   </div>`;
 
-  // 產品排行預設看貨品流動（含夥伴進貨），也可以切成只看自用客戶的零售
+  // 產品排行預設看貨品流動（含經營者進貨），也可以切成只看自用客戶的零售
   const prodRows = gProdScope === "retail" ? retail : rows;
   const byItem = {};
   prodRows.forEach(x => {
@@ -1537,7 +1543,7 @@ function renderSales(){
       ${[["amount", "金額"], ["qty", "件數"], ["buyers", "幾人買"]].map(([k, t]) =>
         `<button data-psort="${k}"${gProdSort === k ? ' class="on"' : ""}>${t}</button>`).join("")}
       ${hasPartner ? `<span style="flex:0 0 1px; background:var(--line-strong); align-self:stretch; margin:3px 5px;"></span>` +
-        [["all", "含夥伴進貨"], ["retail", "只看零售"]].map(([k, t]) =>
+        [["all", "含經營者進貨"], ["retail", "只看零售"]].map(([k, t]) =>
           `<button data-pscope="${k}"${gProdScope === k ? ' class="on"' : ""}>${t}</button>`).join("") : ""}
     </div>
     ${items.slice(0, 10).map((o, i) => `<div class="rankrow" data-sitem="${esc(o.item)}" style="cursor:pointer;">
@@ -1585,7 +1591,7 @@ function renderSales(){
     </div>`).join("")}${newLine}
   </div>` : "";
 
-  // 組織的總量要用「線上所有人」算，不能只算夥伴身份的人，
+  // 組織的總量要用「線上所有人」算，不能只算經營者身份的人，
   // 否則頂上的總額會跟底下各線加起來對不上
   const dps = directPartners();
   const lineIds = new Set();
@@ -1609,7 +1615,7 @@ function renderSales(){
       </div>
       <div class="rval">${shortMoney(x.v)}</div>
     </div>`).join("")}
-    ${lines.length ? `<div class="muted" style="margin-top:10px;">每條線＝這位夥伴自己＋他底下所有下線。線上如果有自用客戶，那筆同時也算進上面的零售業績</div>` : ""}
+    ${lines.length ? `<div class="muted" style="margin-top:10px;">每條線＝這位經營者自己＋他底下所有下線。線上如果有自用客戶，那筆同時也算進上面的零售業績</div>` : ""}
   </div>` : "";
 
   const due = repurchaseList();
@@ -1769,7 +1775,8 @@ function personRowHTML(c){
       <div class="name-row">
         <span class="name">${esc(c.name)}</span>
         <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span>
-        ${isPartner(c) ? `<span class="chip partner">夥伴${dl ? "・直屬 " + dl : ""}</span>` : ""}
+        ${isPartner(c) ? `<span class="chip partner">經營者${dl ? "・直屬 " + dl : ""}</span>`
+          : isEnjoy(c) ? `<span class="chip enjoy">Enjoy</span>` : ""}
       </div>
       <div class="meta">${esc(meta)}</div>
     </div>
@@ -2049,11 +2056,11 @@ function renderHomeInsights(){
   const topOrg = partners.map(c => ({c, v: orgSize(c.id)})).filter(x => x.v > 0)
     .sort((a, b) => b.v - a.v)[0];
   const orgRows = partners.length ? [
-    line("組織規模", `<b>${partners.length}</b> 位夥伴` +
+    line("組織規模", `<b>${partners.length}</b> 位經營者` +
       (topOrg ? `　最大線 ${nameLink(topOrg.c)}（${topOrg.v} 人）` : "")),
-    newPartners.length ? line("本月新夥伴", newPartners.slice(0, 3).map(nameLink).join("、") +
+    newPartners.length ? line("本月新經營者", newPartners.slice(0, 3).map(nameLink).join("、") +
       (newPartners.length > 3 ? ` <span class="muted">…共 ${newPartners.length} 位</span>` : "")) : "",
-    stalled.length ? line("斷層夥伴", stalled.slice(0, 3).map(nameLink).join("、") +
+    stalled.length ? line("斷層經營者", stalled.slice(0, 3).map(nameLink).join("、") +
       (stalled.length > 3 ? ` <span class="muted">…共 ${stalled.length} 位</span>` : "") +
       ` <span class="muted">底下還沒有下線</span>`) : "",
   ].filter(Boolean) : [];
@@ -2145,7 +2152,7 @@ let listTag = "all";
 function renderList(){
   const wf = document.getElementById("list-warmth-filter");
   const groups = [
-    [["all","全部"],["_partner","夥伴"],["_customer","自用客戶"]],
+    [["all","全部"],["_partner","經營者"],["_customer","自用客戶"],["_enjoy","Enjoy"]],
     [["hot",warmthLabel("hot")],["warm",warmthLabel("warm")],["cold",warmthLabel("cold")]],
     [["_buy","有成交"],["_nobuy","未成交"]],
   ];
@@ -2164,7 +2171,8 @@ function renderList(){
 
   let list = DB.customers.slice().sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"));
   if (listWarmth === "_partner") list = list.filter(c => isPartner(c));
-  else if (listWarmth === "_customer") list = list.filter(c => !isPartner(c));
+  else if (listWarmth === "_customer") list = list.filter(c => roleOf(c) === "customer");
+  else if (listWarmth === "_enjoy") list = list.filter(c => isEnjoy(c));
   else if (listWarmth === "_buy") list = list.filter(c => purchasesOf(c.id).length);
   else if (listWarmth === "_nobuy") list = list.filter(c => !purchasesOf(c.id).length);
   else if (listWarmth !== "all") list = list.filter(c => c.warmth === listWarmth);
@@ -2250,7 +2258,8 @@ function openDetail(id){
   openSheet(c.name, `
     <div>
       <span class="chip warmth-${c.warmth}">${esc(warmthLabel(c.warmth))}</span>
-      ${isPartner(c) ? `<span class="chip" style="background:${partnerColor()};color:#fff;">${esc(ROLES[roleOf(c)].label)}</span>` : ""}
+      ${isPartner(c) ? `<span class="chip" style="background:${partnerColor()};color:#fff;">${esc(ROLES.partner.label)}</span>`
+        : isEnjoy(c) ? `<span class="chip enjoy">${esc(ROLES.enjoy.label)}</span>` : ""}
       ${(c.tags||[]).map(t => `<span class="chip tag">#${esc(t)}</span>`).join("")}
     </div>
 
@@ -3076,8 +3085,8 @@ function visibleCustomers(){
     const key = TREE_REL[gMode];
     const inTree = new Set();
     DB.relations.filter(r => r.type === key).forEach(r => { inTree.add(r.from); inTree.add(r.to); });
-    // 組織圖：夥伴即使還沒建立上下線關係也要看得到（會直接掛在「我」底下）
-    list = list.filter(c => inTree.has(c.id) || (gMode === "org" && isPartner(c)));
+    // 組織圖：兩種身份都是下線，還沒建立上下線關係的人也要看得到（直接掛在「我」底下）
+    list = list.filter(c => inTree.has(c.id) || gMode === "org");
   }
   return list;
 }
@@ -3444,7 +3453,7 @@ function renderGraph(){
   if (TREE_REL[gMode]){
     rels = rels.filter(r => r.type === TREE_REL[gMode]);
     if (vis.length){
-      // 以使用者為重心：虛擬「我」節點當樹根。組織圖是沒有上線的夥伴掛在我底下；
+      // 以使用者為重心：虛擬「我」節點當樹根。組織圖是沒有上線的人掛在我底下；
       // 轉介鏈是沒有介紹人的人掛在我底下，一眼看得出哪些人是自己開發的
       const hasUp = new Set(rels.map(r => r.to));
       const roots = vis.filter(c => !hasUp.has(c.id));
@@ -3481,7 +3490,7 @@ function renderGraph(){
     // 門檻照本專案的縮放尺度校準過：一進關係圖 fit 完通常落在 0.35 左右，
     // 直接照設計稿的 0.55／0.4 會讓預設畫面就少了標籤與人名
     labels: gview.s >= 0.3,                        // 關係說明
-    names: gview.s >= 0.2,                         // 一般人的姓名（夥伴與聚焦者永遠留）
+    names: gview.s >= 0.2,                         // 一般人的姓名（經營者與聚焦者永遠留）
     sheen: drawList.length <= 40,                  // 珠子的高光層
     straight: drawList.length > 60,                // 連線的弧度
   };
@@ -4032,21 +4041,21 @@ function seedDemo(){
     return String(t.getMonth() + 1).padStart(2,"0") + "-" + String(t.getDate()).padStart(2,"0"); };
 
   const P = [
-    ["c01","陳志明","0912-000-001","明泰保險 業務經理","老客戶",["保險","台北"],"hot","both","很挺我，轉介紹主力","保守型，只考慮有保本的；決策前一定問太太",bday(0,9),"chihming_tw",420],
-    ["c02","林美惠","0912-000-002","美惠美容工作室","社團認識",["美容","高潛力","台北"],"hot","both","人脈廣，社團核心人物","喜歡天然無香精；預算彈性但要看到成分表",bday(0,2),"meihui.beauty",400],
+    ["c01","陳志明","0912-000-001","明泰保險 業務經理","老客戶",["保險","台北"],"hot","partner","很挺我，轉介紹主力","保守型，只考慮有保本的；決策前一定問太太",bday(0,9),"chihming_tw",420],
+    ["c02","林美惠","0912-000-002","美惠美容工作室","社團認識",["美容","高潛力","台北"],"hot","partner","人脈廣，社團核心人物","喜歡天然無香精；預算彈性但要看到成分表",bday(0,2),"meihui.beauty",400],
     ["c03","張家豪","0912-000-003","豪運車業","陳志明介紹",["汽車"],"warm","customer","太太對儲蓄險有興趣","重視 CP 值，會多方比價；只在週日有空","","",330],
     ["c04","王淑芬","0912-000-004","芬芳花坊","市集擺攤認識",["台中","花藝"],"warm","customer","每年母親節檔期都會團購","喜歡送禮組合，要包裝好看","","",300],
     ["c05","李建宏","0912-000-005","宏達會計事務所","大學同學",["財務","台北"],"warm","customer","每年報稅季後聚一次","","","",380],
     ["c06","黃雅婷","0912-000-006","婷婷甜點","網路社群",["餐飲"],"cold","customer","開幕捧場後就沒再聯絡","","","",210],
-    ["c07","吳俊傑","0912-000-007","傑克健身房 教練","林美惠介紹",["健身","高潛力"],"warm","both","想擴點，可能有資金需求","偏好一次付清拿折扣；訊息用 LINE 比較快","","jack.fit",260],
+    ["c07","吳俊傑","0912-000-007","傑克健身房 教練","林美惠介紹",["健身","高潛力"],"warm","partner","想擴點，可能有資金需求","偏好一次付清拿折扣；訊息用 LINE 比較快","","jack.fit",260],
     ["c08","蔡佩珊","0912-000-008","珊瑚旅行社","展覽交換名片",["旅遊"],"cold","customer","體驗過潔膚儀，還在猶豫","","","",120],
-    ["c09","劉冠廷","0912-000-009","廷威室內設計","老同事",["設計","台北"],"hot","both","案場多，常互相介紹客戶","","","",410],
+    ["c09","劉冠廷","0912-000-009","廷威室內設計","老同事",["設計","台北"],"hot","partner","案場多，常互相介紹客戶","","","",410],
     ["c10","鄭曉玲","0912-000-010","玲瓏服飾","王淑芬介紹",["服飾","台中"],"cold","customer","","","","",190],
     ["c11","周文彬","0912-000-011","彬彬水電行","網路詢問",["工程"],"cold","customer","只來問過一次價，還沒建立任何關係","","","",100],
-    ["c12","許雅琪","0912-000-012","雅琪瑜珈教室","林美惠介紹",["瑜珈","高潛力","台北"],"hot","both","今年剛加入的夥伴，衝勁很強","課後最好聯絡；喜歡看科學根據",bday(0,21),"yaci.yoga",75],
-    ["c13","潘怡君","0912-000-013","怡君早餐店","社區鄰居",["餐飲","定期購"],"hot","customer","每個月固定回購，最穩的自用客","不喜歡推銷，讓她自己決定","","",350],
+    ["c12","許雅琪","0912-000-012","雅琪瑜珈教室","林美惠介紹",["瑜珈","高潛力","台北"],"hot","partner","今年剛加入的經營者，衝勁很強","課後最好聯絡；喜歡看科學根據",bday(0,21),"yaci.yoga",75],
+    ["c13","潘怡君","0912-000-013","怡君早餐店","社區鄰居",["餐飲","定期購"],"hot","enjoy","每個月固定回購，最穩的自用客","不喜歡推銷，讓她自己決定","","",350],
     ["c14","曾文良","0912-000-014","文良診所 藥師","李建宏介紹",["醫護","高潛力"],"warm","customer","專業背景，問得很細","會查成分與臨床資料才決定","","",45],
-    ["c15","徐美玲","0912-000-015","美玲家政","潘怡君介紹",["家事"],"warm","customer","","預算有限，喜歡小包裝先試","","",38],
+    ["c15","徐美玲","0912-000-015","美玲家政","潘怡君介紹",["家事"],"warm","enjoy","","預算有限，喜歡小包裝先試","","",38],
     ["c16","高志偉","0912-000-016","志偉物流","展覽交換名片",["物流"],"cold","customer","買過一次就沒下文，該重新接觸","","","",98],
     ["c17","賴淑娟","0912-000-017","淑娟花藝","許雅琪介紹",["花藝","台中"],"warm","customer","瑜珈教室的學員","","","",26],
     ["c18","莊士豪","0912-000-018","士豪汽車美容","張家豪介紹",["汽車"],"cold","customer","只體驗過，還沒成交","","","",50],
@@ -4094,14 +4103,14 @@ function seedDemo(){
   ];
   DB.interactions = I.map((x,i) => ({id:"i"+i, customerId:x[0], date:ago(x[1]), text:x[2], createdAt:Date.now()+i}));
 
-  // 一年份的訂單。夥伴（陳志明/林美惠/吳俊傑/劉冠廷/許雅琪）的進貨算組織業績，
+  // 一年份的訂單。經營者（陳志明/林美惠/吳俊傑/劉冠廷/許雅琪）的進貨算組織業績，
   // 其餘是零售；熱門品刻意讓好幾個人都買過，產品排行才看得出差別
   const B = [
     // customerId, 幾個月前, 日, 品項, 單價, SV, 數量, 訂單編號, 備註, 定期購週期
     ["c02",0,26,"ageLOC® LumiSpa® iO 潔膚儀",8900,120,1,"o-01","母親節檔期",null],
     ["c02",0,26,"3A 無瑕新生精華",2350,47,3,"o-01","母親節檔期",null],
     ["c13",0,24,"優式倍® 軟膠囊",6115,110,1,"o-02","",30],
-    ["c12",0,22,"[套裝含短效品] 人氣鎂光250分套裝",12075,250,1,"o-03","新夥伴首批進貨",null],
+    ["c12",0,22,"[套裝含短效品] 人氣鎂光250分套裝",12075,250,1,"o-03","新經營者首批進貨",null],
     ["c14",0,18,"水光膠原胜肽六入組",12530,250,1,"o-04","查完資料才下單",null],
     ["c01",0,12,"優式倍® 軟膠囊家庭套裝",27395,500,1,"o-05","全家一起吃",null],
     ["c17",0,8,"ageLOC® TRME先食茶",3450,75,1,"o-06","",null],
